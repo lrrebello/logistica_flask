@@ -107,6 +107,11 @@ class Vehicle(db.Model):
     max_weight = db.Column(db.Numeric(10, 2))
     max_volume = db.Column(db.Numeric(10, 2))
     max_height = db.Column(db.Numeric(10, 2), nullable=True)
+    max_axle_load = db.Column(db.Numeric(5, 2))  # toneladas por eixo
+    length = db.Column(db.Numeric(5, 2))  # metros
+    width = db.Column(db.Numeric(5, 2))   # metros
+    hazmat = db.Column(db.Boolean, default=False)  # transporte perigoso
+    cargo_type = db.Column(db.String(50))  # general, refrigerated, hazardous
     fuel_type = db.Column(db.String(20))
     status = db.Column(db.String(20), default='available')
     notes = db.Column(db.Text)
@@ -131,6 +136,10 @@ class Driver(db.Model):
     max_work_hours_per_day = db.Column(db.Integer, default=10)
     required_rest_after_4h30 = db.Column(db.Integer, default=45)
     required_daily_rest = db.Column(db.Integer, default=11)
+    avoid_tolls = db.Column(db.Boolean, default=False)
+    avoid_highways = db.Column(db.Boolean, default=False)
+    prefer_scenic = db.Column(db.Boolean, default=False)
+    max_speed = db.Column(db.Integer, default=120)  # km/h
     preferred_start_time = db.Column(db.Time)
     preferred_end_time = db.Column(db.Time)
     avoid_highways = db.Column(db.Boolean, default=False)

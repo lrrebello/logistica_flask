@@ -9,7 +9,6 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
 <style>
     #map {
         height: 600px;
@@ -43,30 +42,49 @@
     }
     .legend {
         background: white;
-        padding: 10px;
+        padding: 8px 12px;
         border-radius: 8px;
-        font-size: 12px;
+        font-size: 11px;
+        position: absolute;
+        bottom: 20px;
+        left: 20px;
+        z-index: 1000;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     }
     .legend i {
         display: inline-block;
-        width: 12px;
-        height: 12px;
+        width: 10px;
+        height: 10px;
         border-radius: 50%;
         margin-right: 5px;
     }
-    .legend i.blue { background-color: #3b82f6; }
-    .legend i.green { background-color: #10b981; }
-    .legend i.red { background-color: #ef4444; }
+    .loading {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0,0,0,0.8);
+        color: white;
+        padding: 10px 20px;
+        border-radius: 8px;
+        z-index: 2000;
+    }
+    .dropdown-item.active {
+        background-color: #667eea;
+        color: white;
+    }
+    .route-avoid {
+        cursor: pointer;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="row">
-    <!-- Mapa principal -->
     <div class="col-md-8">
-        <div id="map"></div>
+        <div id="map" style="position: relative; height: 600px;"></div>
         
-        <div class="info-panel d-flex justify-content-between align-items-center">
+        <div class="info-panel d-flex justify-content-between align-items-center mt-2">
             <div>
                 <strong><i class="bi bi-truck"></i> {{ route.driver.name }}</strong>
                 <span class="badge bg-secondary ms-2">{{ route.vehicle.model }} ({{ route.vehicle.plate }})</span>
@@ -75,296 +93,285 @@
                 <span id="routeInfo" class="text-muted">Carregando rota...</span>
             </div>
             <div>
+                <div class="btn-group me-2">
+                    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
+                        <i class="bi bi-gear"></i> Opções
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><h6 class="dropdown-header">Perfil da rota</h6></li>
+                        <li><a class="dropdown-item route-profile" data-profile="fastest" href="#">
+                            <i class="bi bi-lightning-charge"></i> Mais rápida
+                        </a></li>
+                        <li><a class="dropdown-item route-profile" data-profile="shortest" href="#">
+                            <i class="bi bi-rulers"></i> Mais curta
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><h6 class="dropdown-header">Evitar</h6></li>
+                        <li><a class="dropdown-item route-avoid" data-avoid="tolls" href="#">
+                            <i class="bi bi-cash-stack"></i> Evitar portagens
+                        </a></li>
+                        <li><a class="dropdown-item route-avoid" data-avoid="highways" href="#">
+                            <i class="bi bi-shield"></i> Evitar autoestradas
+                        </a></li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" id="applyOptionsBtn" href="#">
+                            <i class="bi bi-check-lg"></i> Aplicar opções
+                        </a></li>
+                    </ul>
+                </div>
                 <button id="optimizeRouteBtn" class="btn btn-primary btn-sm">
-                    <i class="bi bi-robot"></i> Otimizar Rota
+                    <i class="bi bi-robot"></i> Otimizar
+                </button>
+                <button id="reloadRouteBtn" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-repeat"></i>
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Painel lateral com entregas -->
     <div class="col-md-4">
         <div class="card">
             <div class="card-header bg-white">
                 <h5 class="mb-0"><i class="bi bi-list-check"></i> Entregas</h5>
             </div>
-            <div class="card-body" style="max-height: 600px; overflow-y: auto;">
-                <div id="waypointsList">
-                    <div class="text-center py-5 text-muted">
-                        <i class="bi bi-hourglass-split display-4 d-block mb-3"></i>
-                        <p>Carregando entregas...</p>
-                    </div>
-                </div>
-            </div>
-            <div class="card-footer bg-white">
-                <div class="legend">
-                    <strong>Legenda:</strong><br>
-                    <i class="blue"></i> Início da rota<br>
-                    <i class="green"></i> Paradas (entregas)<br>
-                    <i class="red"></i> Destino final
-                </div>
+            <div class="card-body" style="max-height: 550px; overflow-y: auto;">
+                <div id="waypointsList"></div>
             </div>
         </div>
     </div>
 </div>
 
+<div class="legend">
+    <strong>Legenda:</strong><br>
+    <i style="background:#3b82f6"></i> Início (Carga)<br>
+    <i style="background:#10b981"></i> Entrega<br>
+    <i style="background:#ef4444"></i> Fim da rota
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-// ID da rota
 const route_id = {{ route.id }};
-
-// Configuração inicial
 const GEOAPIFY_API_KEY = '{{ geoapify_api_key }}';
 const waypointsData = {{ waypoints|tojson|safe }};
 
-// Verificar se há waypoints com coordenadas
-if (!waypointsData || waypointsData.length === 0) {
-    document.getElementById('routeInfo').innerHTML = '<span class="text-warning">⚠️ Nenhuma coordenada disponível</span>';
-    document.getElementById('waypointsList').innerHTML = `
-        <div class="text-center py-5 text-muted">
-            <i class="bi bi-geo-alt-slash display-4 d-block mb-3"></i>
-            <p>Não há coordenadas de GPS para as entregas desta rota.</p>
-            <small>Adicione latitude/longitude aos endereços dos clientes.</small>
-        </div>
-    `;
+var map;
+var routingControl = null;
+var waypoints = [];
+var markers = [];
+var currentProfile = 'fastest';
+var avoidTolls = {{ route.driver.avoid_tolls|lower if route.driver.avoid_tolls is defined else 'false' }};
+var avoidHighways = {{ route.driver.avoid_highways|lower if route.driver.avoid_highways is defined else 'false' }};
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
 }
 
-// Inicializar mapa centrado em Portugal
-var map = L.map('map').setView([39.3999, -8.2245], 7);
-
-// Adicionar camada de mapa
-L.tileLayer(`https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=${GEOAPIFY_API_KEY}`, {
-    attribution: '&copy; <a href="https://www.geoapify.com/">Geoapify</a> | &copy; OpenStreetMap contributors',
-    maxZoom: 20
-}).addTo(map);
-
-// Preparar waypoints válidos
-var waypoints = [];
-var waypointMarkers = [];
-
-// Coletar waypoints com coordenadas
-waypointsData.forEach(function(wp, index) {
-    if (wp.latitude && wp.longitude) {
-        waypoints.push({
-            id: wp.order_id,
-            lat: parseFloat(wp.latitude),
-            lng: parseFloat(wp.longitude),
-            order_number: wp.order.order_number,
-            client_name: wp.order.client_name,
-            priority: wp.order.priority,
-            address_street: wp.address.street,
-            address_city: wp.address.city,
-            delivery_instructions: wp.address.delivery_instructions,
-            sequence: wp.sequence_order || index + 1
-        });
+function buildRouteUrl(points) {
+    var waypointsStr = points.map(p => `${p.lat},${p.lng}`).join('|');
+    var profileParam = '';
+    switch(currentProfile) {
+        case 'fastest':
+            profileParam = '&mode=drive&optimize=time';
+            break;
+        case 'shortest':
+            profileParam = '&mode=drive&optimize=distance';
+            break;
+        default:
+            profileParam = '&mode=drive';
     }
-});
+    var avoidParams = '';
+    if (avoidTolls) avoidParams += '&avoid=toll';
+    if (avoidHighways) avoidParams += '&avoid=motorway';
+    return `https://api.geoapify.com/v1/routing?waypoints=${waypointsStr}${profileParam}${avoidParams}&apiKey=${GEOAPIFY_API_KEY}`;
+}
 
-// Ordenar por sequência
-waypoints.sort((a, b) => a.sequence - b.sequence);
+async function drawRouteWithGeoapify(points) {
+    if (points.length < 2) return;
+    var loadingDiv = document.createElement('div');
+    loadingDiv.className = 'loading';
+    loadingDiv.innerHTML = '<i class="bi bi-hourglass-split"></i> Calculando rota...';
+    document.getElementById('map').appendChild(loadingDiv);
+    try {
+        var url = buildRouteUrl(points);
+        var response = await fetch(url);
+        var data = await response.json();
+        if (data && data.features && data.features.length > 0) {
+            var feature = data.features[0];
+            var geometry = feature.geometry;
+            var properties = feature.properties;
+            if (routingControl && map.hasLayer(routingControl)) map.removeLayer(routingControl);
+            var latlngs = [];
+            if (geometry.type === 'LineString') {
+                latlngs = geometry.coordinates.map(coord => [coord[1], coord[0]]);
+            } else if (geometry.type === 'MultiLineString') {
+                geometry.coordinates.forEach(line => {
+                    var lineLatLngs = line.map(coord => [coord[1], coord[0]]);
+                    latlngs.push(...lineLatLngs);
+                });
+            }
+            if (latlngs.length > 0) {
+                var routeColor = avoidTolls ? '#f59e0b' : (avoidHighways ? '#10b981' : '#3b82f6');
+                routingControl = L.polyline(latlngs, { color: routeColor, weight: 5, opacity: 0.8 });
+                routingControl.addTo(map);
+                var distance = (properties.distance / 1000).toFixed(2);
+                var time = Math.round(properties.time / 60);
+                var hours = Math.floor(time / 60);
+                var minutes = time % 60;
+                var optionsText = '';
+                if (avoidTolls) optionsText += ' | 🚫 Portagens';
+                if (avoidHighways) optionsText += ' | 🚫 AE';
+                document.getElementById('routeInfo').innerHTML = `<i class="bi bi-rulers"></i> ${distance} km | <i class="bi bi-clock"></i> ${hours}h ${minutes}min<span class="text-success ms-2">✓ ${currentProfile}</span>${optionsText}`;
+                map.fitBounds(routingControl.getBounds());
+            } else throw new Error('Sem coordenadas');
+        } else throw new Error('Resposta sem features');
+    } catch (error) {
+        console.error(error);
+        var latlngs = points.map(p => [p.lat, p.lng]);
+        if (routingControl && map.hasLayer(routingControl)) map.removeLayer(routingControl);
+        routingControl = L.polyline(latlngs, { color: '#ef4444', weight: 3, opacity: 0.6, dashArray: '5, 10' });
+        routingControl.addTo(map);
+        document.getElementById('routeInfo').innerHTML = '<span class="text-warning">⚠️ Rota em linha reta</span>';
+    } finally {
+        loadingDiv.remove();
+    }
+}
 
-// Limpar loading
-document.getElementById('waypointsList').innerHTML = '';
+function drawStraightLine(points) {
+    if (routingControl && map.hasLayer(routingControl)) map.removeLayer(routingControl);
+    var latlngs = points.map(p => [p.lat, p.lng]);
+    routingControl = L.polyline(latlngs, { color: '#ef4444', weight: 3, opacity: 0.6, dashArray: '5, 10' });
+    routingControl.addTo(map);
+    var totalDist = 0;
+    for (let i = 0; i < points.length - 1; i++) {
+        totalDist += haversineDistance(points[i].lat, points[i].lng, points[i+1].lat, points[i+1].lng);
+    }
+    document.getElementById('routeInfo').innerHTML = `<i class="bi bi-rulers"></i> ${totalDist.toFixed(2)} km (linha reta)`;
+}
 
-if (waypoints.length > 0) {
-    // Adicionar marcadores
+function initMap() {
+    map = L.map('map').setView([39.3999, -8.2245], 7);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CartoDB',
+        subdomains: 'abcd',
+        maxZoom: 19
+    }).addTo(map);
+}
+
+function loadRoute() {
+    initMap();
+    waypointsData.forEach(function(wp) {
+        if (wp.latitude && wp.longitude) {
+            waypoints.push({
+                id: wp.order_id,
+                lat: parseFloat(wp.latitude),
+                lng: parseFloat(wp.longitude),
+                order_number: wp.order.order_number,
+                client_name: wp.order.client_name,
+                priority: wp.order.priority,
+                address_street: wp.address.street,
+                address_city: wp.address.city,
+                sequence: wp.sequence_order
+            });
+        }
+    });
+    waypoints.sort((a, b) => a.sequence - b.sequence);
+    if (waypoints.length === 0) {
+        document.getElementById('waypointsList').innerHTML = '<div class="text-center py-5 text-muted"><i class="bi bi-geo-alt-slash display-4 d-block mb-3"></i><p>Sem coordenadas para as entregas.</p></div>';
+        return;
+    }
+    document.getElementById('waypointsList').innerHTML = '';
     waypoints.forEach(function(wp, i) {
         var isFirst = (i === 0);
         var isLast = (i === waypoints.length - 1);
-        
-        var iconHtml = isFirst ? '#3b82f6' : (isLast ? '#ef4444' : '#10b981');
-        var icon = L.divIcon({
-            className: 'custom-icon',
-            html: `<div style="background-color:${iconHtml}; width:${isFirst || isLast ? 14 : 12}px; height:${isFirst || isLast ? 14 : 12}px; border-radius:50%; border:2px solid white; box-shadow:0 0 0 2px ${iconHtml};"></div>`,
-            iconSize: [isFirst || isLast ? 18 : 16, isFirst || isLast ? 18 : 16]
-        });
-        
+        var iconColor = isFirst ? '#3b82f6' : (isLast ? '#ef4444' : '#10b981');
+        var iconSize = isFirst || isLast ? 16 : 12;
+        var icon = L.divIcon({ html: `<div style="background-color:${iconColor}; width:${iconSize}px; height:${iconSize}px; border-radius:50%; border:2px solid white; box-shadow:0 0 0 2px ${iconColor};"></div>`, iconSize: [iconSize+4, iconSize+4] });
         var marker = L.marker([wp.lat, wp.lng], { icon: icon }).addTo(map);
-        
-        marker.bindPopup(`
-            <div style="min-width: 200px;">
-                <strong>📍 Parada ${i + 1}</strong><br>
-                <strong>Pedido #${wp.order_number}</strong><br>
-                <strong>Cliente:</strong> ${wp.client_name}<br>
-                <strong>Endereço:</strong><br>
-                ${wp.address_street}<br>
-                ${wp.address_city}<br>
-                ${wp.delivery_instructions ? `<small>📝 ${wp.delivery_instructions}</small><br>` : ''}
-                ${wp.priority === 'urgent' ? '<span class="badge bg-danger mt-1">Urgente</span>' : ''}
-            </div>
-        `);
-        waypointMarkers.push(marker);
-        
-        // Criar card na lista
-        var cardHtml = `
-            <div class="order-card" data-lat="${wp.lat}" data-lng="${wp.lng}" data-sequence="${i}">
-                <div class="d-flex justify-content-between align-items-start">
-                    <div>
-                        <div class="fw-bold">
-                            #${wp.order_number}
-                            ${wp.priority === 'urgent' ? '<span class="badge bg-danger ms-2">Urgente</span>' : ''}
-                        </div>
-                        <div class="small text-muted mt-1">
-                            <i class="bi bi-building"></i> ${wp.client_name}<br>
-                            <i class="bi bi-geo-alt"></i> ${wp.address_street}, ${wp.address_city}<br>
-                            <i class="bi bi-clock"></i> Sequência: ${wp.sequence}
-                        </div>
-                    </div>
-                    <div>
-                        <span class="badge bg-secondary rounded-pill">${i + 1}º</span>
-                    </div>
-                </div>
-            </div>
-        `;
+        marker.bindPopup(`<strong>📍 Parada ${i+1}</strong><br><strong>Pedido #${wp.order_number}</strong><br><strong>${wp.client_name}</strong><br>${wp.address_street}<br>${wp.address_city}`);
+        markers.push(marker);
+        var cardHtml = `<div class="order-card" data-lat="${wp.lat}" data-lng="${wp.lng}" data-idx="${i}"><div class="fw-bold">${i+1}. #${wp.order_number}${wp.priority === 'urgent' ? '<span class="badge bg-danger ms-2">Urgente</span>' : ''}</div><div class="small text-muted mt-1"><i class="bi bi-building"></i> ${wp.client_name}<br><i class="bi bi-geo-alt"></i> ${wp.address_city}</div></div>`;
         document.getElementById('waypointsList').insertAdjacentHTML('beforeend', cardHtml);
     });
-    
-    // Ajustar zoom
-    var bounds = L.latLngBounds(waypoints.map(wp => [wp.lat, wp.lng]));
-    map.fitBounds(bounds.pad(0.2));
-    
-    // Desenhar rota
-    var routingControl = L.Routing.control({
-        waypoints: waypoints.map(wp => L.latLng(wp.lat, wp.lng)),
-        router: L.Routing.Geoapify({
-            apiKey: GEOAPIFY_API_KEY,
-            profile: 'drive'
-        }),
-        routeWhileDragging: false,
-        showAlternatives: false,
-        fitSelectedRoutes: false,
-        show: false
-    }).addTo(map);
-    
-    // Atualizar info da rota
-    routingControl.on('routesfound', function(e) {
-        var route = e.routes[0];
-        var distance = (route.summary.totalDistance / 1000).toFixed(2);
-        var time = Math.round(route.summary.totalTime / 60);
-        var hours = Math.floor(time / 60);
-        var minutes = time % 60;
-        document.getElementById('routeInfo').innerHTML = `
-            <i class="bi bi-rulers"></i> ${distance} km | 
-            <i class="bi bi-clock"></i> ${hours}h ${minutes}min
-        `;
-    });
-    
-    // Clique nos cards
-    document.querySelectorAll('.order-card').forEach(function(card) {
+    document.querySelectorAll('.order-card').forEach(card => {
         card.addEventListener('click', function() {
-            var lat = this.getAttribute('data-lat');
-            var lng = this.getAttribute('data-lng');
-            var seq = parseInt(this.getAttribute('data-sequence'));
-            if (lat && lng) {
-                map.setView([parseFloat(lat), parseFloat(lng)], 15);
-                if (waypointMarkers[seq]) waypointMarkers[seq].openPopup();
-            }
-            document.querySelectorAll('.order-card').forEach(function(c) { c.classList.remove('active'); });
+            var lat = parseFloat(this.getAttribute('data-lat'));
+            var lng = parseFloat(this.getAttribute('data-lng'));
+            var idx = parseInt(this.getAttribute('data-idx'));
+            map.setView([lat, lng], 14);
+            if (markers[idx]) markers[idx].openPopup();
+            document.querySelectorAll('.order-card').forEach(c => c.classList.remove('active'));
             this.classList.add('active');
         });
     });
-    
-} else {
-    document.getElementById('waypointsList').innerHTML = `
-        <div class="text-center py-5 text-muted">
-            <i class="bi bi-geo-alt-slash display-4 d-block mb-3"></i>
-            <p>Não há coordenadas de GPS para as entregas desta rota.</p>
-            <small>Adicione latitude/longitude aos endereços dos clientes.</small>
-        </div>
-    `;
-    document.getElementById('routeInfo').innerHTML = '<span class="text-warning">⚠️ Rota sem coordenadas</span>';
+    drawRouteWithGeoapify(waypoints);
 }
 
-// Otimizar rota
 document.getElementById('optimizeRouteBtn')?.addEventListener('click', async function() {
-    if (!GEOAPIFY_API_KEY || GEOAPIFY_API_KEY === '') {
-        alert('Configure a API Key do Geoapify no arquivo .env');
-        return;
-    }
-    
-    if (waypoints.length < 3) {
-        alert('São necessárias pelo menos 3 entregas para otimização');
-        return;
-    }
-    
+    if (waypoints.length < 3) { alert('São necessárias pelo menos 3 entregas'); return; }
     this.disabled = true;
     this.innerHTML = '<i class="bi bi-hourglass-split"></i> Otimizando...';
-    
-    try {
-        var startPoint = waypoints[0];
-        var endPoint = waypoints[waypoints.length - 1];
-        var middlePoints = waypoints.slice(1, -1);
-        
-        var shipments = middlePoints.map(function(wp, idx) {
-            return {
-                id: 'order_' + wp.id,
-                delivery: { location: [wp.lng, wp.lat], duration: 300 },
-                pickup: { location_index: 0 }
-            };
-        });
-        
-        var response = await fetch('https://api.geoapify.com/v1/routeplanner?apiKey=' + GEOAPIFY_API_KEY, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                mode: 'drive',
-                agents: [{
-                    start_location: [startPoint.lng, startPoint.lat],
-                    end_location: [endPoint.lng, endPoint.lat],
-                    time_windows: [[0, 36000]]
-                }],
-                shipments: shipments,
-                locations: [{ id: 'start', location: [startPoint.lng, startPoint.lat] }]
-            })
-        });
-        
-        var result = await response.json();
-        
-        if (result && result.features && result.features.length > 0) {
-            var newOrder = [];
-            if (result.features[0].properties.waypoints) {
-                result.features[0].properties.waypoints.forEach(function(wp) {
-                    if (wp.actions) {
-                        wp.actions.forEach(function(action) {
-                            if (action.type === 'job' && action.job_index !== undefined) {
-                                var orderId = shipments[action.job_index]?.id.replace('order_', '');
-                                if (orderId) newOrder.push(parseInt(orderId));
-                            }
-                        });
-                    }
-                });
-            }
-            
-            var finalOrder = [startPoint.id].concat(newOrder).concat([endPoint.id]);
-            
-            if (finalOrder.length > 0) {
-                var saveResponse = await fetch('/routes/' + route_id + '/reorder', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ order: finalOrder })
-                });
-                
-                if (saveResponse.ok) {
-                    alert('Rota otimizada com sucesso! A página será recarregada.');
-                    location.reload();
-                } else {
-                    alert('Erro ao salvar nova ordem da rota');
-                }
-            } else {
-                alert('Não foi possível determinar a nova ordem das entregas');
-            }
-        } else {
-            alert('Erro na otimização: ' + (result.message || 'Verifique os dados da rota'));
+    var start = waypoints[0];
+    var end = waypoints[waypoints.length - 1];
+    var middle = waypoints.slice(1, -1);
+    var optimized = [start];
+    var remaining = [...middle];
+    while (remaining.length > 0) {
+        var current = optimized[optimized.length - 1];
+        var nearestIndex = 0;
+        var minDist = Infinity;
+        for (var i = 0; i < remaining.length; i++) {
+            var dist = haversineDistance(current.lat, current.lng, remaining[i].lat, remaining[i].lng);
+            if (dist < minDist) { minDist = dist; nearestIndex = i; }
         }
-    } catch (error) {
-        console.error('Erro:', error);
-        alert('Erro ao otimizar rota: ' + error.message);
-    } finally {
-        this.disabled = false;
-        this.innerHTML = '<i class="bi bi-robot"></i> Otimizar Rota';
+        optimized.push(remaining[nearestIndex]);
+        remaining.splice(nearestIndex, 1);
     }
+    optimized.push(end);
+    var newOrder = optimized.map(w => w.id);
+    var oldOrder = waypoints.map(w => w.id);
+    if (JSON.stringify(oldOrder) !== JSON.stringify(newOrder)) {
+        try {
+            var response = await fetch('/routes/' + route_id + '/reorder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ order: newOrder })
+            });
+            if (response.ok) { alert('Rota otimizada! Recarregando...'); location.reload(); }
+            else alert('Erro ao salvar');
+        } catch(error) { alert('Erro: ' + error.message); }
+    } else alert('Rota já otimizada!');
+    this.disabled = false;
+    this.innerHTML = '<i class="bi bi-robot"></i> Otimizar';
 });
+
+document.getElementById('reloadRouteBtn')?.addEventListener('click', function() { drawRouteWithGeoapify(waypoints); });
+
+$('.route-profile').click(function(e) {
+    e.preventDefault();
+    currentProfile = $(this).data('profile');
+    $('.route-profile').removeClass('active');
+    $(this).addClass('active');
+});
+
+$('.route-avoid').click(function(e) {
+    e.preventDefault();
+    var avoid = $(this).data('avoid');
+    if (avoid === 'tolls') { avoidTolls = !avoidTolls; $(this).css('opacity', avoidTolls ? '1' : '0.5'); }
+    else if (avoid === 'highways') { avoidHighways = !avoidHighways; $(this).css('opacity', avoidHighways ? '1' : '0.5'); }
+});
+
+$('#applyOptionsBtn').click(function() { drawRouteWithGeoapify(waypoints); });
+
+loadRoute();
 </script>
 {% endblock %}
