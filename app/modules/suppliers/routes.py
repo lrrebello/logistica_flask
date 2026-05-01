@@ -10,7 +10,7 @@ suppliers_bp = Blueprint('suppliers', __name__)
 def list():
     page = request.args.get('page', 1, type=int)
     suppliers = Supplier.query.paginate(page=page, per_page=10)
-    return render_template('suppliers/list.html', suppliers=suppliers)
+    return render_template('suppliers/list.html', suppliers=suppliers)  # Atenção: suppliers, não supplier
 
 @suppliers_bp.route('/new', methods=['GET', 'POST'])
 @login_required
@@ -25,7 +25,7 @@ def new():
         db.session.add(supplier)
         db.session.commit()
         flash('Fornecedor criado com sucesso', 'success')
-        return redirect(url_for('suppliers.list'))
+        return redirect(url_for('suppliers.list'))  # Corrigido: suppliers.list
     return render_template('suppliers/form.html', supplier=None)
 
 @suppliers_bp.route('/<int:id>/edit', methods=['GET', 'POST'])

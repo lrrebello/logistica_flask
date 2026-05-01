@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if vehicle else 'Novo' }} Veículo - Logística{% endblock %}
+
+{% block page_title %}{{ 'Editar' if vehicle else 'Novo' }} Veículo{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">Especificações do Veículo</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="plate" class="form-label">Placa</label>
+                            <input type="text" class="form-control" id="plate" name="plate" value="{{ vehicle.plate if vehicle else '' }}" required placeholder="ABC-1234">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="model" class="form-label">Modelo</label>
+                            <input type="text" class="form-control" id="model" name="model" value="{{ vehicle.model if vehicle else '' }}" required placeholder="Ex: Mercedes-Benz Sprinter">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="type" class="form-label">Tipo</label>
+                            <select class="form-select" id="type" name="type" required>
+                                <option value="light" {{ 'selected' if vehicle and vehicle.type == 'light' else '' }}>Leve</option>
+                                <option value="medium" {{ 'selected' if vehicle and vehicle.type == 'medium' else '' }}>Médio</option>
+                                <option value="heavy" {{ 'selected' if vehicle and vehicle.type == 'heavy' else '' }}>Pesado</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="max_weight" class="form-label">Carga Máxima (kg)</label>
+                            <input type="number" step="0.01" class="form-control" id="max_weight" name="max_weight" value="{{ vehicle.max_weight if vehicle else '' }}">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="max_height" class="form-label">Altura Máxima (m)</label>
+                            <input type="number" step="0.01" class="form-control" id="max_height" name="max_height" value="{{ vehicle.max_height if vehicle else '' }}">
+                        </div>
+                    </div>
+                    
+                    {% if vehicle %}
+                    <div class="mb-3">
+                        <label for="status" class="form-label">Status do Veículo</label>
+                        <select class="form-select" id="status" name="status">
+                            <option value="available" {{ 'selected' if vehicle.status == 'available' else '' }}>Disponível</option>
+                            <option value="in_use" {{ 'selected' if vehicle.status == 'in_use' else '' }}>Em Uso</option>
+                            <option value="maintenance" {{ 'selected' if vehicle.status == 'maintenance' else '' }}>Manutenção</option>
+                        </select>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{{ url_for('vehicles.list') }}" class="btn btn-light">Cancelar</a>
+                        <button type="submit" class="btn btn-primary px-4">Salvar Veículo</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+
+{% block title %}Rotas de Entrega - Logística{% endblock %}
+
+{% block page_title %}Rotas de Entrega{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center bg-white py-3">
+        <h5 class="mb-0">Gestão de Rotas</h5>
+        <a href="{{ url_for('routes.new') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-lg"></i> Planejar Nova Rota
+        </a>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Data</th>
+                        <th>Motorista</th>
+                        <th>Veículo</th>
+                        <th>Paradas</th>
+                        <th>Status</th>
+                        <th class="text-end pe-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for route in routes.items %}
+                    <tr>
+                        <td class="ps-4 fw-bold">{{ route.route_date.strftime('%d/%m/%Y') }}</td>
+                        <td>{{ route.driver.name }}</td>
+                        <td>
+                            <div>{{ route.vehicle.model }}</div>
+                            <small class="text-muted">{{ route.vehicle.plate }}</small>
+                        </td>
+                        <td>
+                            <span class="badge bg-secondary">{{ route.waypoints|length }} paradas</span>
+                        </td>
+                        <td>
+                            {% if route.status == 'planned' %}
+                                <span class="badge bg-info text-dark">Planejada</span>
+                            {% elif route.status == 'in_progress' %}
+                                <span class="badge bg-primary">Em Curso</span>
+                            {% elif route.status == 'completed' %}
+                                <span class="badge bg-success">Concluída</span>
+                            {% elif route.status == 'cancelled' %}
+                                <span class="badge bg-danger">Cancelada</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-end pe-4">
+                            {% if route.status != 'completed' and route.status != 'cancelled' %}
+                            <form action="{{ url_for('routes.complete', id=route.id) }}" method="POST" class="d-inline">
+                                <button type="submit" class="btn btn-outline-success btn-sm">
+                                    <i class="bi bi-check2-circle"></i> Finalizar
+                                </button>
+                            </form>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-map display-4 d-block mb-3"></i>
+                            Nenhuma rota planejada.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if routes.pages > 1 %}
+    <div class="card-footer bg-white py-3">
+        <nav>
+            <ul class="pagination justify-content-center mb-0">
+                <li class="page-item {{ 'disabled' if not routes.has_prev }}">
+                    <a class="page-link" href="{{ url_for('routes.list', page=routes.prev_num) if routes.has_prev else '#' }}">Anterior</a>
+                </li>
+                {% for page_num in routes.iter_pages() %}
+                    {% if page_num %}
+                        <li class="page-item {{ 'active' if page_num == routes.page }}">
+                            <a class="page-link" href="{{ url_for('routes.list', page=page_num) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {{ 'disabled' if not routes.has_next }}">
+                    <a class="page-link" href="{{ url_for('routes.list', page=routes.next_num) if routes.has_next else '#' }}">Próximo</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+
+{% block title %}Controle de Estoque - Logística{% endblock %}
+
+{% block page_title %}Estoque{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header bg-white py-3">
+        <h5 class="mb-0">Situação do Estoque</h5>
+    </div>
+    <div class="card-body p-0">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-4">Produto</th>
+                        <th>Quantidade Atual</th>
+                        <th>Nível Mínimo</th>
+                        <th>Status</th>
+                        <th>Última Atualização</th>
+                        <th class="text-end pe-4">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for stock in stocks.items %}
+                    <tr>
+                        <td class="ps-4">
+                            <div class="fw-bold">{{ stock.product.name }}</div>
+                            <small class="text-muted">{{ stock.product.supplier.name if stock.product.supplier else 'Sem fornecedor' }}</small>
+                        </td>
+                        <td>{{ stock.quantity }} {{ stock.product.unit }}</td>
+                        <td>{{ stock.minimum_level }} {{ stock.product.unit }}</td>
+                        <td>
+                            {% if stock.quantity <= 0 %}
+                                <span class="badge bg-danger">Esgotado</span>
+                            {% elif stock.quantity <= stock.minimum_level %}
+                                <span class="badge bg-warning text-dark">Nível Crítico</span>
+                            {% else %}
+                                <span class="badge bg-success">Normal</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ stock.last_updated.strftime('%d/%m/%Y %H:%M') }}</td>
+                        <td class="text-end pe-4">
+                            <a href="{{ url_for('stock.update', id=stock.id) }}" class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-arrow-repeat"></i> Atualizar
+                            </a>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="6" class="text-center py-5 text-muted">
+                            <i class="bi bi-graph-down display-4 d-block mb-3"></i>
+                            Nenhum registro de estoque encontrado.
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% if stocks.pages > 1 %}
+    <div class="card-footer bg-white py-3">
+        <nav>
+            <ul class="pagination justify-content-center mb-0">
+                <li class="page-item {{ 'disabled' if not stocks.has_prev }}">
+                    <a class="page-link" href="{{ url_for('stock.list', page=stocks.prev_num) if stocks.has_prev else '#' }}">Anterior</a>
+                </li>
+                {% for page_num in stocks.iter_pages() %}
+                    {% if page_num %}
+                        <li class="page-item {{ 'active' if page_num == stocks.page }}">
+                            <a class="page-link" href="{{ url_for('stock.list', page=page_num) }}">{{ page_num }}</a>
+                        </li>
+                    {% else %}
+                        <li class="page-item disabled"><span class="page-link">...</span></li>
+                    {% endif %}
+                {% endfor %}
+                <li class="page-item {{ 'disabled' if not stocks.has_next }}">
+                    <a class="page-link" href="{{ url_for('stock.list', page=stocks.next_num) if stocks.has_next else '#' }}">Próximo</a>
+                </li>
+            </ul>
+        </nav>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,368 @@
+{% extends "base.html" %}
+
+{% block title %}Planejar Rota - Logística{% endblock %}
+
+{% block page_title %}Planejar Rota de Entrega{% endblock %}
+
+{% block extra_css %}
+<style>
+    .sortable-item {
+        cursor: move;
+        transition: all 0.2s;
+    }
+    .sortable-item:hover {
+        background-color: #f8f9fa;
+        transform: scale(1.01);
+    }
+    .sortable-handle {
+        cursor: grab;
+        margin-right: 10px;
+        color: #6c757d;
+    }
+    .sortable-handle:active {
+        cursor: grabbing;
+    }
+    .sequence-badge {
+        background-color: #667eea;
+        color: white;
+        border-radius: 50%;
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 10px;
+    }
+    .client-card {
+        border-left: 3px solid #667eea;
+    }
+    .drag-over {
+        border: 2px dashed #667eea;
+        background-color: #f0f0ff;
+    }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@latest/css/sortable.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Configurações da Rota -->
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">Configurações da Rota</h5>
+            </div>
+            <div class="card-body p-4">
+                <form id="routeForm" method="POST">
+                    <div class="mb-3">
+                        <label for="route_number" class="form-label">Número da Rota *</label>
+                        <input type="text" class="form-control" id="route_number" name="route_number" 
+                               value="{{ route.route_number if route else '' }}" required 
+                               placeholder="Ex: 280">
+                        <div class="form-text">Ex: 280, 30, 45</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="route_name" class="form-label">Nome da Rota</label>
+                        <input type="text" class="form-control" id="route_name" name="route_name" 
+                               value="{{ route.route_name if route else '' }}" 
+                               placeholder="Ex: Rota do Algarve">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="region" class="form-label">Região</label>
+                        <select class="form-select" id="region" name="region">
+                            <option value="">Selecione...</option>
+                            <option value="Algarve">Algarve</option>
+                            <option value="Alentejo">Alentejo</option>
+                            <option value="Lisboa">Lisboa</option>
+                            <option value="Centro">Centro</option>
+                            <option value="Norte">Norte</option>
+                            <option value="Madeira">Madeira</option>
+                            <option value="Açores">Açores</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="route_date" class="form-label">Data da Rota</label>
+                        <input type="date" class="form-control" id="route_date" name="route_date" 
+                               value="{{ route.route_date.strftime('%Y-%m-%d') if route and route.route_date else '' }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="driver_id" class="form-label">Motorista</label>
+                        <select class="form-select" id="driver_id" name="driver_id" required>
+                            <option value="">Selecione...</option>
+                            {% for driver in drivers %}
+                            <option value="{{ driver.id }}" {% if route and route.driver_id == driver.id %}selected{% endif %}>
+                                {{ driver.name }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="vehicle_id" class="form-label">Veículo</label>
+                        <select class="form-select" id="vehicle_id" name="vehicle_id" required>
+                            <option value="">Selecione...</option>
+                            {% for vehicle in vehicles %}
+                            <option value="{{ vehicle.id }}" {% if route and route.vehicle_id == vehicle.id %}selected{% endif %}>
+                                {{ vehicle.brand }} {{ vehicle.model }} ({{ vehicle.plate }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Observações</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="3">{{ route.notes if route else '' }}</textarea>
+                    </div>
+                    
+                    <!-- Campo oculto para sequência -->
+                    <input type="hidden" id="waypoints_order" name="waypoints_order" value="">
+            </div>
+        </div>
+        
+        <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary btn-lg">
+                <i class="bi bi-save"></i> Salvar Rota
+            </button>
+            <a href="{{ url_for('routes.list') }}" class="btn btn-light">Cancelar</a>
+        </div>
+        </form>
+    </div>
+
+    <!-- Seleção e Ordenação de Pedidos -->
+    <div class="col-md-8">
+        <!-- Pedidos disponíveis para adicionar -->
+        <div class="card mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">Pedidos Pendentes</h5>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 40px;">
+                                    <input type="checkbox" id="selectAll">
+                                </th>
+                                <th>Pedido</th>
+                                <th>Cliente</th>
+                                <th>Cidade</th>
+                                <th>Prioridade</th>
+                                <th>Horário</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for order in available_orders %}
+                            <tr>
+                                <td>
+                                    <input type="checkbox" class="order-checkbox" value="{{ order.id }}">
+                                </td>
+                                <td>
+                                    <span class="fw-bold">#{{ order.order_number }}</span>
+                                    <small class="text-muted d-block">{{ order.created_at.strftime('%d/%m/%Y') }}</small>
+                                </td>
+                                <td>{{ order.client.name }}</td>
+                                <td>{{ order.address.city }}</td>
+                                <td>
+                                    {% if order.priority == 'urgent' %}
+                                        <span class="badge bg-danger">Urgente</span>
+                                    {% elif order.priority == 'high' %}
+                                        <span class="badge bg-warning">Alta</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">Normal</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if order.address.time_window_start %}
+                                        {{ order.address.time_window_start.strftime('%H:%M') }} - 
+                                        {{ order.address.time_window_end.strftime('%H:%M') }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="6" class="text-center py-5 text-muted">
+                                    Não há pedidos pendentes para esta região.
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card-footer bg-light">
+                    <button type="button" class="btn btn-success btn-sm" id="addSelectedBtn">
+                        <i class="bi bi-plus-circle"></i> Adicionar Selecionados à Rota
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Waypoints da Rota (Ordenáveis) -->
+        <div class="card">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Entregas da Rota</h5>
+                <div>
+                    <button type="button" class="btn btn-outline-primary btn-sm" id="optimizeBtn">
+                        <i class="bi bi-robot"></i> Otimizar com IA
+                    </button>
+                    <button type="button" class="btn btn-outline-danger btn-sm" id="clearSelectedBtn">
+                        <i class="bi bi-trash"></i> Remover Selecionados
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <ul id="sortable-list" class="list-group list-group-flush">
+                    {% for waypoint in waypoints %}
+                    <li class="list-group-item sortable-item client-card" data-id="{{ waypoint.order_id }}" data-sequence="{{ waypoint.sequence_order }}">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <span class="sortable-handle">
+                                    <i class="bi bi-grip-vertical"></i>
+                                </span>
+                                <span class="sequence-badge">{{ waypoint.sequence_order }}</span>
+                                <div class="d-inline-block">
+                                    <div>
+                                        <strong>#{{ waypoint.order.order_number }}</strong>
+                                        <small class="text-muted"> - {{ waypoint.order.client.name }}</small>
+                                    </div>
+                                    <div class="small text-muted">
+                                        <i class="bi bi-geo-alt"></i> {{ waypoint.address.street }}, {{ waypoint.address.city }}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="btn-group">
+                                <button type="button" class="btn btn-sm btn-outline-info view-order" data-id="{{ waypoint.order_id }}">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-danger remove-waypoint" data-id="{{ waypoint.order_id }}">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </li>
+                    {% else %}
+                    <li class="list-group-item text-center py-5 text-muted">
+                        <i class="bi bi-truck display-4 d-block mb-3"></i>
+                        Nenhuma entrega adicionada à rota.
+                        <br>Selecione pedidos na lista acima e clique em "Adicionar Selecionados".
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="card-footer bg-light">
+                <div class="row">
+                    <div class="col-md-6">
+                        <small class="text-muted">
+                            <i class="bi bi-info-circle"></i> Arraste as entregas para reordenar
+                        </small>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <span class="badge bg-primary" id="totalWaypoints">{{ waypoints|length }}</span> entregas
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Sortable.js para drag-and-drop
+var sortable = new Sortable(document.getElementById('sortable-list'), {
+    animation: 150,
+    handle: '.sortable-handle',
+    onEnd: function() {
+        updateSequenceNumbers();
+    }
+});
+
+// Atualizar números de sequência
+function updateSequenceNumbers() {
+    var items = document.querySelectorAll('#sortable-list .sortable-item');
+    items.forEach(function(item, index) {
+        var seq = index + 1;
+        // Atualizar badge
+        item.querySelector('.sequence-badge').textContent = seq;
+        // Atualizar data attribute
+        item.setAttribute('data-sequence', seq);
+    });
+    
+    // Atualizar campo oculto com ordem
+    var order = [];
+    items.forEach(function(item) {
+        order.push(item.getAttribute('data-id'));
+    });
+    document.getElementById('waypoints_order').value = order.join(',');
+}
+
+// Selecionar todos
+document.getElementById('selectAll')?.addEventListener('change', function(e) {
+    document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = e.target.checked);
+});
+
+// Adicionar selecionados
+document.getElementById('addSelectedBtn')?.addEventListener('click', function() {
+    var selected = [];
+    document.querySelectorAll('.order-checkbox:checked').forEach(function(cb) {
+        selected.push(cb.value);
+    });
+    
+    if (selected.length === 0) {
+        alert('Selecione pelo menos um pedido');
+        return;
+    }
+    
+    // Enviar via AJAX
+    fetch(window.location.href, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: 'add_waypoints=' + selected.join(',') + '&action=add'
+    }).then(response => {
+        if (response.ok) location.reload();
+        else alert('Erro ao adicionar pedidos');
+    });
+});
+
+// Remover waypoint
+document.querySelectorAll('.remove-waypoint').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        var orderId = this.getAttribute('data-id');
+        if (confirm('Remover esta entrega da rota?')) {
+            fetch(window.location.href, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'remove_waypoint=' + orderId + '&action=remove'
+            }).then(response => {
+                if (response.ok) location.reload();
+                else alert('Erro ao remover pedido');
+            });
+        }
+    });
+});
+
+// Otimizar com IA
+document.getElementById('optimizeBtn')?.addEventListener('click', function() {
+    if (confirm('A IA vai reordenar as entregas para otimizar rotas. Deseja continuar?')) {
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: 'action=optimize'
+        }).then(response => {
+            if (response.ok) location.reload();
+            else alert('Erro ao otimizar rota');
+        });
+    }
+});
+</script>
+{% endblock %}

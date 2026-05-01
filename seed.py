@@ -1,289 +1,313 @@
 #!/usr/bin/env python3
 """
-Script para popular o banco de dados com dados de teste
+Script para popular o banco de dados com dados de teste para Portugal
 Execute com: python seed.py
 """
 
-from app import app, db
-from models import User, Supplier, Product, Stock, Client, Address, Vehicle, Driver, Order, OrderItem
-from datetime import datetime, date, timedelta
+from app import create_app
+from app.extensions import db
+from app.models import (
+    User, Supplier, Product, Stock, Client, Address, 
+    Vehicle, Driver, Order, OrderItem, Route, RouteWaypoint,
+    DeliveryZone, Holiday
+)
+from datetime import datetime, date, time, timedelta
+import uuid
 
 def seed_database():
+    app = create_app()
     with app.app_context():
-        # Limpar dados existentes (opcional)
-        print("🔄 Limpando dados existentes...")
+        print("🔄 Recriando banco de dados...")
         db.drop_all()
         db.create_all()
         
-        # ==================== CRIAR USUÁRIOS ====================
         print("👤 Criando usuários...")
         
+        # Admin
         admin = User(
-            open_id='admin_user',
+            open_id='admin',
             name='Administrador',
-            email='admin@logistica.com',
+            email='admin@logistica.pt',
             role='admin',
-            login_method='local'
+            login_method='local',
+            is_active=True
         )
-        admin.set_password('admin')
+        admin.set_password('admin123')
         db.session.add(admin)
         
-        user = User(
-            open_id='user_user',
-            name='Usuário Teste',
-            email='user@logistica.com',
+        # Utilizador comercial
+        commercial = User(
+            open_id='comercial',
+            name='João Silva',
+            email='comercial@logistica.pt',
             role='user',
-            login_method='local'
+            login_method='local',
+            is_active=True
         )
-        user.set_password('user')
-        db.session.add(user)
+        commercial.set_password('comercial123')
+        db.session.add(commercial)
         
-        driver = User(
-            open_id='driver_user',
-            name='Motorista Teste',
-            email='driver@logistica.com',
+        # Motorista 1
+        driver_user = User(
+            open_id='motorista1',
+            name='António Santos',
+            email='motorista@logistica.pt',
             role='driver',
-            login_method='local'
+            login_method='local',
+            is_active=True
         )
-        driver.set_password('driver')
-        db.session.add(driver)
+        driver_user.set_password('motorista123')
+        db.session.add(driver_user)
         
         db.session.commit()
         print("✅ Usuários criados")
         
-        # ==================== CRIAR FORNECEDORES ====================
         print("🏢 Criando fornecedores...")
         
-        suppliers_data = [
-            {
-                'name': 'Fornecedor A',
-                'contact_info': 'João Silva',
-                'email': 'joao@fornecedora.com',
-                'phone': '(11) 98765-4321'
-            },
-            {
-                'name': 'Fornecedor B',
-                'contact_info': 'Maria Santos',
-                'email': 'maria@fornecedorb.com',
-                'phone': '(11) 99876-5432'
-            },
-            {
-                'name': 'Fornecedor C',
-                'contact_info': 'Pedro Costa',
-                'email': 'pedro@fornecedorc.com',
-                'phone': '(11) 97654-3210'
-            }
+        suppliers = [
+            Supplier(name='Frutas do Algarve', nif='501234567', contact_person='Manuel Costa', 
+                    email='manuel@frutasalgarve.pt', phone='289123456', address='Estrada Nacional 125, Faro'),
+            Supplier(name='Carnes Transmontanas', nif='502345678', contact_person='Ricardo Pereira',
+                    email='ricardo@carnestm.pt', phone='276123456', address='Zona Industrial, Bragança'),
+            Supplier(name='Padaria Central', nif='503456789', contact_person='Isabel Ferreira',
+                    email='isabel@padariacentral.pt', phone='213456789', address='Rua Augusta, Lisboa'),
+            Supplier(name='Bebidas do Norte', nif='504567890', contact_person='Carlos Mendes',
+                    email='carlos@bebidasnorte.pt', phone='253123456', address='Av. da Liberdade, Porto')
         ]
         
-        suppliers = []
-        for data in suppliers_data:
-            supplier = Supplier(**data)
+        for supplier in suppliers:
             db.session.add(supplier)
-            suppliers.append(supplier)
         
         db.session.commit()
         print(f"✅ {len(suppliers)} fornecedores criados")
         
-        # ==================== CRIAR PRODUTOS ====================
         print("📦 Criando produtos...")
         
-        products_data = [
-            {'name': 'Arroz Integral 5kg', 'description': 'Arroz integral de qualidade premium', 'price': '25.50', 'unit': 'kg', 'supplier_id': suppliers[0].id},
-            {'name': 'Feijão Carioca 2kg', 'description': 'Feijão carioca selecionado', 'price': '15.00', 'unit': 'kg', 'supplier_id': suppliers[0].id},
-            {'name': 'Macarrão Integral 500g', 'description': 'Macarrão integral tipo penne', 'price': '8.50', 'unit': 'un', 'supplier_id': suppliers[1].id},
-            {'name': 'Azeite Extra Virgem 500ml', 'description': 'Azeite importado extra virgem', 'price': '45.00', 'unit': 'un', 'supplier_id': suppliers[1].id},
-            {'name': 'Sal Refinado 1kg', 'description': 'Sal refinado iodado', 'price': '3.50', 'unit': 'kg', 'supplier_id': suppliers[2].id},
-            {'name': 'Açúcar Cristal 2kg', 'description': 'Açúcar cristal refinado', 'price': '12.00', 'unit': 'kg', 'supplier_id': suppliers[2].id},
+        products = [
+            Product(sku='FRU-001', name='Laranja Algarvia', description='Laranjas frescas do Algarve', 
+                   price=1.50, unit='kg', supplier_id=suppliers[0].id),
+            Product(sku='FRU-002', name='Maçã Bravo', description='Maçã Bravo de Esmolfe', 
+                   price=2.20, unit='kg', supplier_id=suppliers[0].id),
+            Product(sku='CAR-001', name='Bife da Vazia', description='Carne maturada 21 dias', 
+                   price=18.90, unit='kg', supplier_id=suppliers[1].id),
+            Product(sku='CAR-002', name='Frango Caseiro', description='Frango de produção caseira', 
+                   price=7.50, unit='kg', supplier_id=suppliers[1].id),
+            Product(sku='PAD-001', name='Pão Alentejano', description='Pão tradicional alentejano', 
+                   price=2.80, unit='un', supplier_id=suppliers[2].id),
+            Product(sku='BEB-001', name='Vinho do Porto', description='Vinho do Porto 10 anos', 
+                   price=25.00, unit='garrafa', supplier_id=suppliers[3].id),
         ]
         
-        products = []
-        for data in products_data:
-            product = Product(**data)
+        for product in products:
             db.session.add(product)
-            products.append(product)
         
         db.session.commit()
-        print(f"✅ {len(products)} produtos criados")
         
-        # ==================== CRIAR STOCK ====================
-        print("📊 Criando stock...")
-        
+        # Adicionar stock
         for product in products:
             stock = Stock(
                 product_id=product.id,
-                quantity=100,
-                minimum_level=20
+                quantity=1000,
+                minimum_level=100,
+                maximum_level=2000,
+                location=f'ZONA-{product.id}'
             )
             db.session.add(stock)
         
         db.session.commit()
-        print(f"✅ Stock criado para {len(products)} produtos")
+        print(f"✅ {len(products)} produtos criados")
         
-        # ==================== CRIAR CLIENTES ====================
         print("👥 Criando clientes...")
         
-        clients_data = [
-            {'name': 'Supermercado Central', 'tax_id': '12.345.678/0001-90', 'email': 'compras@central.com.br', 'phone': '(11) 3333-4444'},
-            {'name': 'Mercearia do Bairro', 'tax_id': '98.765.432/0001-10', 'email': 'vendas@mercearia.com.br', 'phone': '(11) 4444-5555'},
-            {'name': 'Restaurante Sabor', 'tax_id': '55.555.555/0001-88', 'email': 'pedidos@sabor.com.br', 'phone': '(11) 5555-6666'},
+        clients = [
+            Client(name='Continente Modelo', nif='501234568', email='compras@continente.pt', phone='213456789'),
+            Client(name='Pingo Doce', nif='502345679', email='compras@pingodoce.pt', phone='213456790'),
+            Client(name='Lidl Portugal', nif='503456780', email='compras@lidl.pt', phone='213456791'),
+            Client(name='Auchan', nif='504567891', email='compras@auchan.pt', phone='213456792'),
         ]
         
-        clients = []
-        for data in clients_data:
-            client = Client(**data)
+        for client in clients:
             db.session.add(client)
-            clients.append(client)
+        
+        db.session.commit()
+        
+        # Adicionar endereços
+        addresses = [
+            Address(client_id=clients[0].id, street='Av. João XXI, 50', city='Lisboa', 
+                   postal_code='1000-300', latitude=38.7369, longitude=-9.1427, 
+                   is_headquarters=True, is_delivery_point=True),
+            Address(client_id=clients[1].id, street='Rua de Santa Catarina, 200', city='Porto', 
+                   postal_code='4000-450', latitude=41.1496, longitude=-8.6060, 
+                   is_headquarters=True, is_delivery_point=True),
+            Address(client_id=clients[2].id, street='Estrada Nacional 10', city='Alverca', 
+                   postal_code='2615-001', latitude=38.8919, longitude=-9.0398, 
+                   is_headquarters=True, is_delivery_point=True),
+            Address(client_id=clients[3].id, street='Av. D. João II, 50', city='Lisboa', 
+                   postal_code='1990-095', latitude=38.7690, longitude=-9.0945, 
+                   is_headquarters=True, is_delivery_point=True),
+        ]
+        
+        for address in addresses:
+            db.session.add(address)
         
         db.session.commit()
         print(f"✅ {len(clients)} clientes criados")
         
-        # ==================== CRIAR ENDEREÇOS ====================
-        print("📍 Criando endereços...")
-        
-        addresses_data = [
-            {'client_id': clients[0].id, 'street': 'Rua A, 100', 'city': 'São Paulo', 'postal_code': '01000-000', 'latitude': -23.5505, 'longitude': -46.6333, 'is_headquarters': True},
-            {'client_id': clients[1].id, 'street': 'Rua B, 200', 'city': 'São Paulo', 'postal_code': '02000-000', 'latitude': -23.5500, 'longitude': -46.6300, 'is_headquarters': True},
-            {'client_id': clients[2].id, 'street': 'Rua C, 300', 'city': 'São Paulo', 'postal_code': '03000-000', 'latitude': -23.5510, 'longitude': -46.6350, 'is_headquarters': True},
-        ]
-        
-        addresses = []
-        for data in addresses_data:
-            address = Address(**data)
-            db.session.add(address)
-            addresses.append(address)
-        
-        db.session.commit()
-        print(f"✅ {len(addresses)} endereços criados")
-        
-        # ==================== CRIAR VEÍCULOS ====================
         print("🚚 Criando veículos...")
         
-        vehicles_data = [
-            {'plate': 'ABC-1234', 'model': 'Volkswagen Delivery', 'type': 'light', 'max_weight': '1500', 'max_height': '2.0', 'status': 'available'},
-            {'plate': 'DEF-5678', 'model': 'Iveco Daily', 'type': 'medium', 'max_weight': '3500', 'max_height': '2.5', 'status': 'available'},
-            {'plate': 'GHI-9012', 'model': 'Scania P310', 'type': 'heavy', 'max_weight': '10000', 'max_height': '3.0', 'status': 'available'},
+        vehicles = [
+            Vehicle(plate='AA-01-AA', model='Sprinter', brand='Mercedes', type='van',
+                   max_weight=2000, max_volume=12, max_height=2.0, fuel_type='diesel', status='available'),
+            Vehicle(plate='BB-02-BB', model='Daily', brand='Iveco', type='truck',
+                   max_weight=3500, max_volume=20, max_height=2.5, fuel_type='diesel', status='available'),
+            Vehicle(plate='CC-03-CC', model='Transit', brand='Ford', type='van',
+                   max_weight=1500, max_volume=10, max_height=1.9, fuel_type='diesel', status='available'),
         ]
         
-        vehicles = []
-        for data in vehicles_data:
-            vehicle = Vehicle(**data)
+        for vehicle in vehicles:
             db.session.add(vehicle)
-            vehicles.append(vehicle)
         
         db.session.commit()
         print(f"✅ {len(vehicles)} veículos criados")
         
-        # ==================== CRIAR MOTORISTAS ====================
         print("👨‍✈️ Criando motoristas...")
         
-        drivers_data = [
-            {
-                'user_id': driver.id,
-                'name': 'Carlos Silva',
-                'license_number': '12345678901',
-                'license_expiry': date.today() + timedelta(days=365),
-                'phone': '(11) 99999-1111',
-                'address': 'Rua X, 123 - São Paulo',
-                'emergency_contact': '(11) 99999-2222',
-                'hire_date': date.today() - timedelta(days=365),
-                'status': 'active'
-            },
-            {
-                'user_id': None,
-                'name': 'João Santos',
-                'license_number': '98765432109',
-                'license_expiry': date.today() + timedelta(days=180),
-                'phone': '(11) 99999-3333',
-                'address': 'Rua Y, 456 - São Paulo',
-                'emergency_contact': '(11) 99999-4444',
-                'hire_date': date.today() - timedelta(days=180),
-                'status': 'active'
-            },
+        drivers = [
+            Driver(user_id=driver_user.id, name='António Santos', license_number='PT-1234567',
+                  license_expiry=date(2028, 12, 31), license_category='C', phone='912345678',
+                  emergency_contact='Maria Santos', emergency_phone='962345678', status='active',
+                  preferred_start_time=time(8, 0), preferred_end_time=time(18, 0)),
+            Driver(name='José Ferreira', license_number='PT-7654321',
+                  license_expiry=date(2027, 6, 30), license_category='B', phone='923456789',
+                  emergency_contact='Ana Ferreira', emergency_phone='963456789', status='active'),
         ]
         
-        drivers_list = []
-        for data in drivers_data:
-            drv = Driver(**data)
-            db.session.add(drv)
-            drivers_list.append(drv)
+        for driver in drivers:
+            db.session.add(driver)
         
         db.session.commit()
-        print(f"✅ {len(drivers_list)} motoristas criados")
+        print(f"✅ {len(drivers)} motoristas criados")
         
-        # ==================== CRIAR PEDIDOS ====================
-        print("📋 Criando pedidos...")
+        print("📝 Criando pedidos...")
         
-        orders_data = [
-            {
-                'order_number': f'PED-{datetime.now().timestamp()}',
-                'client_id': clients[0].id,
-                'address_id': addresses[0].id,
-                'status': 'pending',
-                'notes': 'Entrega prioritária',
-                'total_amount': '100.00'
-            },
-            {
-                'order_number': f'PED-{datetime.now().timestamp() + 1}',
-                'client_id': clients[1].id,
-                'address_id': addresses[1].id,
-                'status': 'confirmed',
-                'notes': 'Entrega normal',
-                'total_amount': '250.50'
-            },
-            {
-                'order_number': f'PED-{datetime.now().timestamp() + 2}',
-                'client_id': clients[2].id,
-                'address_id': addresses[2].id,
-                'status': 'in_transit',
-                'notes': 'Em rota de entrega',
-                'total_amount': '450.00'
-            },
-        ]
-        
-        orders_list = []
-        for data in orders_data:
-            order = Order(**data)
+        orders = []
+        for i, client in enumerate(clients):
+            order = Order(
+                order_number=f'ORD-{datetime.now().strftime("%Y%m%d")}-{i+1:03d}',
+                client_id=client.id,
+                address_id=client.addresses[0].id if client.addresses else None,
+                status='confirmed',
+                priority='normal',
+                notes=f'Pedido de teste {i+1}',
+                created_by_id=admin.id
+            )
             db.session.add(order)
-            orders_list.append(order)
+            orders.append(order)
         
         db.session.commit()
-        print(f"✅ {len(orders_list)} pedidos criados")
         
-        # ==================== CRIAR ITENS DE PEDIDOS ====================
-        print("📦 Criando itens de pedidos...")
-        
-        order_items_count = 0
-        for i, order in enumerate(orders_list):
-            for j in range(2):
-                product = products[i * 2 + j]
-                item = OrderItem(
-                    order_id=order.id,
-                    product_id=product.id,
-                    quantity=10,
-                    unit_price=float(product.price),
-                    subtotal=float(product.price) * 10
-                )
+        # Adicionar itens aos pedidos
+        for order in orders:
+            items = [
+                OrderItem(order_id=order.id, product_id=products[0].id, quantity=100, 
+                         unit_price=products[0].price, total_price=100 * products[0].price),
+                OrderItem(order_id=order.id, product_id=products[1].id, quantity=50,
+                         unit_price=products[1].price, total_price=50 * products[1].price),
+            ]
+            total = 0
+            for item in items:
                 db.session.add(item)
-                order_items_count += 1
+                total += item.total_price
+            order.total_amount = total
         
         db.session.commit()
-        print(f"✅ {order_items_count} itens de pedidos criados")
+        print(f"✅ {len(orders)} pedidos criados")
         
-        # ==================== RESUMO ====================
+        print("🗺️ Criando rotas...")
+        
+        # Criar uma rota para teste
+        route = Route(
+            route_number=f'ROT-{datetime.now().strftime("%Y%m%d")}-001',
+            driver_id=drivers[0].id,
+            vehicle_id=vehicles[0].id,
+            route_date=date.today() + timedelta(days=1),
+            status='planned',
+            optimization_method='manual',
+            created_by_id=admin.id
+        )
+        db.session.add(route)
+        db.session.commit()
+        
+        # Adicionar waypoints à rota
+        for idx, order in enumerate(orders[:3]):
+            waypoint = RouteWaypoint(
+                route_id=route.id,
+                order_id=order.id,
+                address_id=order.address_id,
+                sequence_order=idx + 1,
+                original_sequence_order=idx + 1,
+                status='pending',
+                estimated_travel_time=30
+            )
+            db.session.add(waypoint)
+        
+        db.session.commit()
+        print(f"✅ Rota criada com {len(orders[:3])} paradas")
+        
+        print("🗺️ Criando zonas de entrega...")
+        
+        zones = [
+            DeliveryZone(name='Zona Sul', description='Lisboa e arredores', 
+                        postal_codes='1000-1999, 2000-2999', default_vehicle_type='van'),
+            DeliveryZone(name='Zona Norte', description='Porto e arredores',
+                        postal_codes='4000-4999, 5000-5999', default_vehicle_type='truck'),
+        ]
+        
+        for zone in zones:
+            db.session.add(zone)
+        
+        db.session.commit()
+        
+        print("📅 Criando feriados...")
+        
+        holidays = [
+            Holiday(date=date(2026, 1, 1), name='Ano Novo', affects_delivery=True),
+            Holiday(date=date(2026, 4, 5), name='Páscoa', affects_delivery=True),
+            Holiday(date=date(2026, 4, 25), name='Dia da Liberdade', affects_delivery=True),
+            Holiday(date=date(2026, 5, 1), name='Dia do Trabalhador', affects_delivery=True),
+            Holiday(date=date(2026, 6, 10), name='Dia de Portugal', affects_delivery=True),
+            Holiday(date=date(2026, 8, 15), name='Assunção de Nossa Senhora', affects_delivery=True),
+            Holiday(date=date(2026, 10, 5), name='Implantação da República', affects_delivery=True),
+            Holiday(date=date(2026, 11, 1), name='Dia de Todos os Santos', affects_delivery=True),
+            Holiday(date=date(2026, 12, 1), name='Restauração da Independência', affects_delivery=True),
+            Holiday(date=date(2026, 12, 8), name='Imaculada Conceição', affects_delivery=True),
+            Holiday(date=date(2026, 12, 25), name='Natal', affects_delivery=True),
+        ]
+        
+        for holiday in holidays:
+            db.session.add(holiday)
+        
+        db.session.commit()
+        
         print("\n" + "="*50)
-        print("✅ BANCO DE DADOS POPULADO COM SUCESSO!")
+        print("🎉 BANCO DE DADOS CRIADO COM SUCESSO!")
         print("="*50)
-        print("\n📝 Credenciais de teste:\n")
-        print("Admin:")
-        print("  Email: admin@logistica.com")
-        print("  Senha: admin")
-        print("\nUsuário:")
-        print("  Email: user@logistica.com")
-        print("  Senha: user")
-        print("\nMotorista:")
-        print("  Email: driver@logistica.com")
-        print("  Senha: driver")
-        print("\n" + "="*50 + "\n")
+        print("\n📋 Credenciais de acesso:")
+        print("   Admin:     admin@logistica.pt / admin123")
+        print("   Comercial: comercial@logistica.pt / comercial123")
+        print("   Motorista: motorista@logistica.pt / motorista123")
+        print("\n📊 Resumo:")
+        print(f"   - {len(users)} utilizadores")
+        print(f"   - {len(suppliers)} fornecedores")
+        print(f"   - {len(products)} produtos")
+        print(f"   - {len(clients)} clientes")
+        print(f"   - {len(vehicles)} veículos")
+        print(f"   - {len(drivers)} motoristas")
+        print(f"   - {len(orders)} pedidos")
+        print(f"   - 1 rota com {len(orders[:3])} paradas")
+        print(f"   - {len(zones)} zonas de entrega")
+        print(f"   - {len(holidays)} feriados")
+        print("="*50)
 
 if __name__ == '__main__':
     seed_database()

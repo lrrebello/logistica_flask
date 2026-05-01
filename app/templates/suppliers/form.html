@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}{{ 'Editar' if supplier else 'Novo' }} Fornecedor - Logística{% endblock %}
+
+{% block page_title %}{{ 'Editar' if supplier else 'Novo' }} Fornecedor{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">Dados Cadastrais</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="name" class="form-label">Nome da Empresa / Razão Social</label>
+                        <input type="text" class="form-control" id="name" name="name" value="{{ supplier.name if supplier else '' }}" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="contact_info" class="form-label">Informações de Contato / Responsável</label>
+                        <input type="text" class="form-control" id="contact_info" name="contact_info" value="{{ supplier.contact_info if supplier else '' }}">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">E-mail</label>
+                            <input type="email" class="form-control" id="email" name="email" value="{{ supplier.email if supplier else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="phone" class="form-label">Telefone</label>
+                            <input type="text" class="form-control" id="phone" name="phone" value="{{ supplier.phone if supplier else '' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{{ url_for('suppliers.list') }}" class="btn btn-light">Cancelar</a>
+                        <button type="submit" class="btn btn-primary px-4">Salvar Fornecedor</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

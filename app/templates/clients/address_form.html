@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Novo Endereço - {{ client.name }}{% endblock %}
+
+{% block page_title %}Novo Endereço{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('clients.list') }}">Clientes</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('clients.edit', id=client.id) }}">{{ client.name }}</a></li>
+                <li class="breadcrumb-item active">Novo Endereço</li>
+            </ol>
+        </nav>
+
+        <div class="card">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">Cadastrar Endereço para {{ client.name }}</h5>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="street" class="form-label">Rua, Número e Complemento</label>
+                        <input type="text" class="form-control" id="street" name="street" placeholder="Ex: Av. Paulista, 1000 - Apto 12" required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-8 mb-3">
+                            <label for="city" class="form-label">Cidade / UF</label>
+                            <input type="text" class="form-control" id="city" name="city" placeholder="Ex: São Paulo / SP" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="postal_code" class="form-label">CEP</label>
+                            <input type="text" class="form-control" id="postal_code" name="postal_code" placeholder="00000-000" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="latitude" class="form-label">Latitude (opcional)</label>
+                            <input type="number" step="any" class="form-control" id="latitude" name="latitude">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="longitude" class="form-label">Longitude (opcional)</label>
+                            <input type="number" step="any" class="form-control" id="longitude" name="longitude">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="is_headquarters" name="is_headquarters">
+                            <label class="form-check-label" for="is_headquarters">Este endereço é a sede da empresa?</label>
+                        </div>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="is_delivery_point" name="is_delivery_point" checked>
+                            <label class="form-check-label" for="is_delivery_point">Este é um ponto de entrega/descarga?</label>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2 mt-4">
+                        <a href="{{ url_for('clients.edit', id=client.id) }}" class="btn btn-light">Cancelar</a>
+                        <button type="submit" class="btn btn-success px-4">Salvar Endereço</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

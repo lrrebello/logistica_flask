@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}Atualizar Estoque - {{ stock.product.name }}{% endblock %}
+
+{% block page_title %}Atualizar Estoque{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">Ajuste de Quantidade</h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="alert alert-info mb-4">
+                    <strong>Produto:</strong> {{ stock.product.name }}<br>
+                    <strong>Unidade:</strong> {{ stock.product.unit }}
+                </div>
+                
+                <form method="POST">
+                    <div class="mb-3">
+                        <label for="quantity" class="form-label">Quantidade Atual em Estoque</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" class="form-control form-control-lg" id="quantity" name="quantity" value="{{ stock.quantity }}" required>
+                            <span class="input-group-text">{{ stock.product.unit }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <label for="minimum_level" class="form-label">Nível Mínimo (Alerta)</label>
+                        <div class="input-group">
+                            <input type="number" step="0.01" class="form-control" id="minimum_level" name="minimum_level" value="{{ stock.minimum_level }}">
+                            <span class="input-group-text">{{ stock.product.unit }}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{{ url_for('stock.list') }}" class="btn btn-light">Cancelar</a>
+                        <button type="submit" class="btn btn-primary px-4">Salvar Alterações</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
