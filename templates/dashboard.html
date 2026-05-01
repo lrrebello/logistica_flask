@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Logística Irmãos Monteiro{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_suppliers }}</div>
+            <div class="stat-label">Fornecedores</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_products }}</div>
+            <div class="stat-label">Produtos</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_clients }}</div>
+            <div class="stat-label">Clientes</div>
+        </div>
+    </div>
+    <div class="col-md-3 mb-3">
+        <div class="stat-card">
+            <div class="stat-value">{{ stats.total_orders }}</div>
+            <div class="stat-label">Pedidos</div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">Status dos Pedidos</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Pendentes</span>
+                        <span class="badge bg-warning">{{ stats.pending_orders }}</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar bg-warning" style="width: {{ (stats.pending_orders / stats.total_orders * 100) if stats.total_orders > 0 else 0 }}%"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Em Trânsito</span>
+                        <span class="badge bg-info">{{ stats.in_transit_orders }}</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar bg-info" style="width: {{ (stats.in_transit_orders / stats.total_orders * 100) if stats.total_orders > 0 else 0 }}%"></div>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Entregues</span>
+                        <span class="badge bg-success">{{ stats.delivered_orders }}</span>
+                    </div>
+                    <div class="progress">
+                        <div class="progress-bar bg-success" style="width: {{ (stats.delivered_orders / stats.total_orders * 100) if stats.total_orders > 0 else 0 }}%"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-4">
+            <div class="card-header bg-danger text-white">
+                <h5 class="mb-0">Alertas</h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-warning mb-0" role="alert">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Stock Crítico:</strong> {{ stats.critical_stock }} produtos com nível mínimo atingido
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header bg-info text-white">
+                <h5 class="mb-0">Atalhos Rápidos</h5>
+            </div>
+            <div class="card-body">
+                <a href="{{ url_for('suppliers_new') }}" class="btn btn-sm btn-outline-primary mb-2 w-100">
+                    <i class="bi bi-plus"></i> Novo Fornecedor
+                </a>
+                <a href="{{ url_for('products_new') }}" class="btn btn-sm btn-outline-primary mb-2 w-100">
+                    <i class="bi bi-plus"></i> Novo Produto
+                </a>
+                <a href="{{ url_for('clients_new') }}" class="btn btn-sm btn-outline-primary mb-2 w-100">
+                    <i class="bi bi-plus"></i> Novo Cliente
+                </a>
+                <a href="{{ url_for('orders_new') }}" class="btn btn-sm btn-outline-success w-100">
+                    <i class="bi bi-plus"></i> Novo Pedido
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
