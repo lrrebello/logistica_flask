@@ -17,7 +17,8 @@
             <table class="table table-hover align-middle mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-4">Data</th>
+                        <th class="ps-4">Nº Rota</th>
+                        <th>Data</th>
                         <th>Motorista</th>
                         <th>Veículo</th>
                         <th>Paradas</th>
@@ -28,7 +29,8 @@
                 <tbody>
                     {% for route in routes.items %}
                     <tr>
-                        <td class="ps-4 fw-bold">{{ route.route_date.strftime('%d/%m/%Y') }}</td>
+                        <td class="ps-4 fw-bold">{{ route.route_number }}</td>
+                        <td>{{ route.route_date.strftime('%d/%m/%Y') }}</td>
                         <td>{{ route.driver.name }}</td>
                         <td>
                             <div>{{ route.vehicle.model }}</div>
@@ -49,24 +51,37 @@
                             {% endif %}
                         </td>
                         <td class="text-end pe-4">
-                            {% if route.status != 'completed' and route.status != 'cancelled' %}
-                            <form action="{{ url_for('routes.complete', id=route.id) }}" method="POST" class="d-inline">
-                                <button type="submit" class="btn btn-outline-success btn-sm">
-                                    <i class="bi bi-check2-circle"></i> Finalizar
-                                </button>
-                                <a href="{{ url_for('routes.view', id=route.id) }}" class="btn btn-outline-primary btn-sm">
-                                    <i class="bi bi-eye"></i> Ver Detalhes
+                            <div class="btn-group">
+                                <a href="{{ url_for('routes.view', id=route.id) }}" class="btn btn-outline-primary btn-sm" title="Ver detalhes">
+                                    <i class="bi bi-eye"></i>
                                 </a>
-                                <a href="{{ url_for('routes.view_map', id=route.id) }}" class="btn btn-outline-info btn-sm">
-                                    <i class="bi bi-map"></i> Ver Mapa
+                                <a href="{{ url_for('routes.view_map', id=route.id) }}" class="btn btn-outline-info btn-sm" title="Ver mapa">
+                                    <i class="bi bi-map"></i>
                                 </a>
-                            </form>
-                            {% endif %}
+                                <a href="{{ url_for('routes.navigate', id=route.id) }}" class="btn btn-outline-success btn-sm" title="Navegar com GPS">
+                                    <i class="bi bi-compass"></i>
+                                </a>
+                                {% if route.status != 'completed' and route.status != 'cancelled' %}
+                                    <a href="{{ url_for('routes.edit', id=route.id) }}" class="btn btn-outline-warning btn-sm" title="Editar">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form action="{{ url_for('routes.complete', id=route.id) }}" method="POST" class="d-inline">
+                                        <button type="submit" class="btn btn-outline-success btn-sm" title="Finalizar rota" onclick="return confirm('Confirmar finalização da rota?')">
+                                            <i class="bi bi-check2-circle"></i>
+                                        </button>
+                                    </form>
+                                    <form action="{{ url_for('routes.delete', id=route.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Tem certeza que deseja excluir esta rota?')">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm" title="Excluir">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% else %}
                     <tr>
-                        <td colspan="6" class="text-center py-5 text-muted">
+                        <td colspan="7" class="text-center py-5 text-muted">
                             <i class="bi bi-map display-4 d-block mb-3"></i>
                             Nenhuma rota planejada.
                         </td>

@@ -385,3 +385,128 @@ def view_map(id):
                          route=route, 
                          waypoints=waypoints_data,
                          geoapify_api_key=geoapify_api_key)
+
+@routes_bp.route('/<int:id>/export/gpx')
+@login_required
+def export_gpx(id):
+    """Exportar rota no formato GPX para GPS Garmin/TomTom"""
+    route = Route.query.get_or_404(id)
+    waypoints = route.waypoints
+    
+    # Construir XML GPX
+    gpx = f'''<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Logistica Irmãos Monteiro" xmlns="http://www.topografix.com/GPX/1/1">
+    <metadata>
+        <name>Rota {route.route_number} - {route.route_date}</name>
+        <desc>{route.route_name or 'Rota de entrega'}</desc>
+    </metadata>
+    <trk>
+        <name>Rota {route.route_number}</name>
+        <trkseg>
+'''
+    
+    # Adicionar pontos da rota (se tiver a geometria salva)
+    # Por enquanto, adicionar waypoints
+    for wp in waypoints:
+        if wp.address.latitude and wp.address.longitude:
+            gpx += f'''            <trkpt lat="{wp.address.latitude}" lon="{wp.address.longitude}">
+                <name>Parada {wp.sequence_order} - Pedido {wp.order.order_number}</name>
+                <desc>{wp.address.street}, {wp.address.city}</desc>
+            </trkpt>
+'''
+    
+    gpx += '''        </trkseg>
+    </trk>
+</gpx>'''
+    
+    response = make_response(gpx)
+    response.headers['Content-Type'] = 'application/gpx+xml'
+    response.headers['Content-Disposition'] = f'attachment; filename=rota_{route.route_number}_{route.route_date}.gpx'
+    return response
+
+@routes_bp.route('/<int:id>/export/kml')
+@login_required
+def export_kml(id):
+    """Exportar rota no formato KML para Google Earth/My Maps"""
+    route = Route.query.get_or_404(id)
+    waypoints = route.waypoints
+    
+    kml = f'''<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+    <Document>
+        <name>Rota {route.route_number}</name>
+        <description>{route.route_name or 'Rota de entrega'}</description>
+        <Style id="routeLine">
+            <LineStyle>
+                <color>ff0066cc</color>
+                <width>4</width>
+            </LineStyle>
+        </Style>
+        <Placemark>
+            <name>Percurso</name>
+            <styleUrl>#routeLine</styleUrl>
+            <LineString>
+                <coordinates>
+'''
+    
+    for wp in waypoints:
+        if wp.address.latitude and wp.address.longitude:
+            kml += f'                    {wp.address.longitude},{wp.address.latitude}\n'
+    
+    kml += '''                </coordinates>
+            </LineString>
+        </Placemark>
+'''
+    
+    for wp in waypoints:
+        if wp.address.latitude and wp.address.longitude:
+            kml += f'''
+        <Placemark>
+            <name>Parada {wp.sequence_order} - {wp.order.client.name}</name>
+            <description>{wp.address.street}, {wp.address.city}</description>
+            <Point>
+                <coordinates>{wp.address.longitude},{wp.address.latitude}</coordinates>
+            </Point>
+        </Placemark>
+'''
+    
+    kml += '''    </Document>
+</kml>'''
+    
+    response = make_response(kml)
+    response.headers['Content-Type'] = 'application/vnd.google-earth.kml+xml'
+    response.headers['Content-Disposition'] = f'attachment; filename=rota_{route.route_number}_{route.route_date}.kml'
+    return response
+
+@routes_bp.route('/<int:id>/navigate')
+@login_required
+def navigate(id):
+    """Página com links para navegação em apps de GPS"""
+    route = Route.query.get_or_404(id)
+    waypoints = route.waypoints
+    
+    # Construir URLs para navegação
+    google_maps_urls = []
+    waze_urls = []
+    
+    for i, wp in enumerate(waypoints, 1):
+        if wp.address.latitude and wp.address.longitude:
+            lat = wp.address.latitude
+            lng = wp.address.longitude
+            google_maps_urls.append({
+                'order': i,
+                'url': f'https://www.google.com/maps/dir/?api=1&destination={lat},{lng}',
+                'client': wp.order.client.name,
+                'address': f'{wp.address.street}, {wp.address.city}'
+            })
+            waze_urls.append({
+                'order': i,
+                'url': f'https://www.waze.com/ul?ll={lat},{lng}&navigate=yes',
+                'client': wp.order.client.name,
+                'address': f'{wp.address.street}, {wp.address.city}'
+            })
+    
+    return render_template('routes/navigate.html', 
+                         route=route, 
+                         google_urls=google_maps_urls,
+                         waze_urls=waze_urls)
