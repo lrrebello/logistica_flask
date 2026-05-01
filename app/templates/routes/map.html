@@ -69,12 +69,28 @@
         border-radius: 8px;
         z-index: 2000;
     }
-    .dropdown-item.active {
-        background-color: #667eea;
-        color: white;
+    .options-panel {
+        background: white;
+        border-radius: 8px;
+        padding: 10px;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
-    .route-avoid {
-        cursor: pointer;
+    .options-panel .btn-group {
+        width: 100%;
+    }
+    .options-panel .btn {
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+    .profile-active {
+        background-color: #667eea !important;
+        color: white !important;
+        border-color: #667eea !important;
+    }
+    .active-option {
+        background-color: #10b981 !important;
+        color: white !important;
     }
 </style>
 {% endblock %}
@@ -93,37 +109,40 @@
                 <span id="routeInfo" class="text-muted">Carregando rota...</span>
             </div>
             <div>
-                <div class="btn-group me-2">
-                    <button type="button" class="btn btn-sm btn-outline-secondary dropdown-toggle" data-bs-toggle="dropdown">
-                        <i class="bi bi-gear"></i> Opções
-                    </button>
-                    <ul class="dropdown-menu dropdown-menu-end">
-                        <li><h6 class="dropdown-header">Perfil da rota</h6></li>
-                        <li><a class="dropdown-item route-profile" data-profile="fastest" href="#">
-                            <i class="bi bi-lightning-charge"></i> Mais rápida
-                        </a></li>
-                        <li><a class="dropdown-item route-profile" data-profile="shortest" href="#">
-                            <i class="bi bi-rulers"></i> Mais curta
-                        </a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><h6 class="dropdown-header">Evitar</h6></li>
-                        <li><a class="dropdown-item route-avoid" data-avoid="tolls" href="#">
-                            <i class="bi bi-cash-stack"></i> Evitar portagens
-                        </a></li>
-                        <li><a class="dropdown-item route-avoid" data-avoid="highways" href="#">
-                            <i class="bi bi-shield"></i> Evitar autoestradas
-                        </a></li>
-                        <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" id="applyOptionsBtn" href="#">
-                            <i class="bi bi-check-lg"></i> Aplicar opções
-                        </a></li>
-                    </ul>
-                </div>
                 <button id="optimizeRouteBtn" class="btn btn-primary btn-sm">
                     <i class="bi bi-robot"></i> Otimizar
                 </button>
                 <button id="reloadRouteBtn" class="btn btn-outline-secondary btn-sm">
                     <i class="bi bi-arrow-repeat"></i>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Painel de opções - fora do dropdown para funcionar sempre -->
+        <div class="options-panel">
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="text-muted small">Perfil da rota:</label>
+                    <div class="btn-group btn-group-sm w-100" role="group">
+                        <button type="button" class="btn btn-outline-primary profile-btn" data-profile="fastest">⚡ Mais rápida</button>
+                        <button type="button" class="btn btn-outline-primary profile-btn" data-profile="shortest">📏 Mais curta</button>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <label class="text-muted small">Opções adicionais:</label>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-warning option-btn" data-option="tolls" style="flex:1">
+                            <i class="bi bi-cash-stack"></i> 🚫 Portagens
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info option-btn" data-option="highways" style="flex:1">
+                            <i class="bi bi-shield"></i> 🚫 Autoestradas
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="text-center mt-2">
+                <button id="applyOptionsBtn" class="btn btn-success btn-sm">
+                    <i class="bi bi-check-lg"></i> Aplicar opções e recalcular rota
                 </button>
             </div>
         </div>
@@ -145,12 +164,13 @@
     <strong>Legenda:</strong><br>
     <i style="background:#3b82f6"></i> Início (Carga)<br>
     <i style="background:#10b981"></i> Entrega<br>
-    <i style="background:#ef4444"></i> Fim da rota
+    <i style="background:#ef4444"></i> Fim da rota<br>
+    <i style="background:#f59e0b"></i> Rota sem portagens<br>
+    <i style="background:#10b981"></i> Rota sem AE
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
 const route_id = {{ route.id }};
@@ -246,18 +266,6 @@ async function drawRouteWithGeoapify(points) {
     }
 }
 
-function drawStraightLine(points) {
-    if (routingControl && map.hasLayer(routingControl)) map.removeLayer(routingControl);
-    var latlngs = points.map(p => [p.lat, p.lng]);
-    routingControl = L.polyline(latlngs, { color: '#ef4444', weight: 3, opacity: 0.6, dashArray: '5, 10' });
-    routingControl.addTo(map);
-    var totalDist = 0;
-    for (let i = 0; i < points.length - 1; i++) {
-        totalDist += haversineDistance(points[i].lat, points[i].lng, points[i+1].lat, points[i+1].lng);
-    }
-    document.getElementById('routeInfo').innerHTML = `<i class="bi bi-rulers"></i> ${totalDist.toFixed(2)} km (linha reta)`;
-}
-
 function initMap() {
     map = L.map('map').setView([39.3999, -8.2245], 7);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
@@ -316,6 +324,7 @@ function loadRoute() {
     drawRouteWithGeoapify(waypoints);
 }
 
+// Botão otimizar
 document.getElementById('optimizeRouteBtn')?.addEventListener('click', async function() {
     if (waypoints.length < 3) { alert('São necessárias pelo menos 3 entregas'); return; }
     this.disabled = true;
@@ -354,23 +363,36 @@ document.getElementById('optimizeRouteBtn')?.addEventListener('click', async fun
     this.innerHTML = '<i class="bi bi-robot"></i> Otimizar';
 });
 
+// Botão recarregar
 document.getElementById('reloadRouteBtn')?.addEventListener('click', function() { drawRouteWithGeoapify(waypoints); });
 
-$('.route-profile').click(function(e) {
-    e.preventDefault();
-    currentProfile = $(this).data('profile');
-    $('.route-profile').removeClass('active');
-    $(this).addClass('active');
+// Perfil da rota
+document.querySelectorAll('.profile-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        document.querySelectorAll('.profile-btn').forEach(b => b.classList.remove('profile-active'));
+        this.classList.add('profile-active');
+        currentProfile = this.getAttribute('data-profile');
+    });
 });
 
-$('.route-avoid').click(function(e) {
-    e.preventDefault();
-    var avoid = $(this).data('avoid');
-    if (avoid === 'tolls') { avoidTolls = !avoidTolls; $(this).css('opacity', avoidTolls ? '1' : '0.5'); }
-    else if (avoid === 'highways') { avoidHighways = !avoidHighways; $(this).css('opacity', avoidHighways ? '1' : '0.5'); }
+// Opções de evitar
+document.querySelectorAll('.option-btn').forEach(btn => {
+    btn.addEventListener('click', function() {
+        var option = this.getAttribute('data-option');
+        if (option === 'tolls') {
+            avoidTolls = !avoidTolls;
+            this.classList.toggle('active-option');
+        } else if (option === 'highways') {
+            avoidHighways = !avoidHighways;
+            this.classList.toggle('active-option');
+        }
+    });
 });
 
-$('#applyOptionsBtn').click(function() { drawRouteWithGeoapify(waypoints); });
+// Aplicar opções
+document.getElementById('applyOptionsBtn')?.addEventListener('click', function() {
+    drawRouteWithGeoapify(waypoints);
+});
 
 loadRoute();
 </script>
