@@ -1,3 +1,4 @@
+import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
 from flask_login import login_required, current_user
 from app.models import Route, RouteWaypoint, Driver, Vehicle, Order, Address
@@ -342,3 +343,45 @@ def optimize_route(id):
     
     db.session.commit()
     return jsonify({'success': True})
+
+@routes_bp.route('/<int:id>/map')
+@login_required
+def view_map(id):
+    """Visualizar rota no mapa com Geoapify"""
+    route = Route.query.get_or_404(id)
+    waypoints = route.waypoints
+    
+    # Converter waypoints para dicionário serializável em JSON
+    waypoints_data = []
+    for wp in waypoints:
+        # Verificar se tem coordenadas
+        lat = None
+        lng = None
+        if wp.address and wp.address.latitude and wp.address.longitude:
+            lat = float(wp.address.latitude)
+            lng = float(wp.address.longitude)
+        
+        waypoints_data.append({
+            'order_id': wp.order_id,
+            'sequence_order': wp.sequence_order,
+            'latitude': lat,
+            'longitude': lng,
+            'address': {
+                'street': wp.address.street if wp.address else '',
+                'city': wp.address.city if wp.address else '',
+                'postal_code': wp.address.postal_code if wp.address else '',
+                'delivery_instructions': wp.address.delivery_instructions if wp.address else ''
+            },
+            'order': {
+                'order_number': wp.order.order_number if wp.order else '',
+                'priority': wp.order.priority if wp.order else 'normal',
+                'client_name': wp.order.client.name if wp.order and wp.order.client else ''
+            }
+        })
+    
+    geoapify_api_key = os.environ.get('GEOAPIFY_API_KEY', '')
+    
+    return render_template('routes/map.html', 
+                         route=route, 
+                         waypoints=waypoints_data,
+                         geoapify_api_key=geoapify_api_key)
