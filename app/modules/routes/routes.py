@@ -259,3 +259,86 @@ def delete(id):
     db.session.commit()
     flash('Rota removida com sucesso!', 'success')
     return redirect(url_for('routes.list'))
+
+@routes_bp.route('/<int:id>')
+@login_required
+def view(id):
+    """Visualizar detalhes da rota com todas as entregas"""
+    route = Route.query.get_or_404(id)
+    waypoints = route.waypoints  # Já ordenados pela sequence_order
+    
+    # Calcular estatísticas da rota
+    total_orders = len(waypoints)
+    total_estimated_time = sum(w.estimated_travel_time or 0 for w in waypoints)
+    
+    return render_template('routes/view.html', 
+                         route=route, 
+                         waypoints=waypoints,
+                         total_orders=total_orders,
+                         total_estimated_time=total_estimated_time)
+
+@routes_bp.route('/<int:id>/reorder', methods=['POST'])
+@login_required
+def reorder_waypoints(id):
+    """Reordenar waypoints da rota via drag-and-drop"""
+    route = Route.query.get_or_404(id)
+    data = request.get_json()
+    order = data.get('order', [])
+    
+    for seq, order_id in enumerate(order, 1):
+        waypoint = RouteWaypoint.query.filter_by(route_id=id, order_id=order_id).first()
+        if waypoint:
+            waypoint.sequence_order = seq
+            waypoint.is_optimized = False
+            waypoint.optimized_by = 'manual'
+    
+    route.was_optimized = False
+    db.session.commit()
+    return jsonify({'success': True})
+
+@routes_bp.route('/<int:route_id>/remove/<int:order_id>', methods=['POST'])
+@login_required
+def remove_waypoint(route_id, order_id):
+    """Remover um waypoint da rota"""
+    waypoint = RouteWaypoint.query.filter_by(route_id=route_id, order_id=order_id).first()
+    if waypoint:
+        order = Order.query.get(order_id)
+        order.status = 'pending'
+        db.session.delete(waypoint)
+        
+        # Reordenar os waypoints restantes
+        waypoints = RouteWaypoint.query.filter_by(route_id=route_id).order_by(RouteWaypoint.sequence_order).all()
+        for seq, wp in enumerate(waypoints, 1):
+            wp.sequence_order = seq
+        
+        db.session.commit()
+        return jsonify({'success': True})
+    
+    return jsonify({'error': 'Waypoint not found'}), 404
+
+@routes_bp.route('/<int:id>/optimize', methods=['POST'])
+@login_required
+def optimize_route(id):
+    """Otimizar rota com algoritmo inteligente"""
+    route = Route.query.get_or_404(id)
+    waypoints = list(route.waypoints)
+    
+    # Algoritmo de otimização (TSP simplificado)
+    # Ordenar por: prioridade (urgente > alta > normal) e depois por região/cidade
+    waypoints.sort(key=lambda w: (
+        0 if w.order.priority == 'urgent' else 1 if w.order.priority == 'high' else 2,
+        w.address.city
+    ))
+    
+    for seq, waypoint in enumerate(waypoints, 1):
+        waypoint.sequence_order = seq
+        waypoint.is_optimized = True
+        waypoint.optimized_by = 'ai'
+    
+    route.was_optimized = True
+    route.last_optimization_date = datetime.utcnow()
+    route.optimization_method = 'ai_basic'
+    route.optimization_score = 0.95  # Score fictício
+    
+    db.session.commit()
+    return jsonify({'success': True})

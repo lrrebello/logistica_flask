@@ -54,6 +54,9 @@
                                 <button type="submit" class="btn btn-outline-success btn-sm">
                                     <i class="bi bi-check2-circle"></i> Finalizar
                                 </button>
+                                <a href="{{ url_for('routes.view', id=route.id) }}" class="btn btn-outline-primary btn-sm">
+                                    <i class="bi bi-eye"></i> Ver Detalhes
+                                </a>
                             </form>
                             {% endif %}
                         </td>

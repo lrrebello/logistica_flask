@@ -1,0 +1,371 @@
+{% extends "base.html" %}
+
+{% block title %}Rota {{ route.route_number }} - {{ route.route_name or route.region }}{% endblock %}
+
+{% block page_title %}
+    Rota {{ route.route_number }}
+    {% if route.route_name %}
+        <small class="text-muted">{{ route.route_name }}</small>
+    {% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .waypoint-card {
+        border-left: 3px solid #667eea;
+        margin-bottom: 12px;
+        transition: all 0.2s;
+        cursor: move;
+    }
+    .waypoint-card:hover {
+        background-color: #f8f9fa;
+        transform: translateX(5px);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    .drag-handle {
+        cursor: grab;
+        color: #6c757d;
+        font-size: 1.2rem;
+    }
+    .drag-handle:active {
+        cursor: grabbing;
+    }
+    .sequence-number {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 50%;
+        width: 36px;
+        height: 36px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1.1rem;
+    }
+    .status-badge {
+        position: absolute;
+        right: 15px;
+        top: 15px;
+    }
+    .drag-over {
+        border: 2px dashed #667eea;
+        background-color: #f0f0ff;
+    }
+    .btn-optimize {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        border: none;
+        color: white;
+    }
+    .btn-optimize:hover {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: white;
+    }
+</style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@latest/css/sortable.min.css">
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Informações da Rota -->
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-truck"></i> Informações da Rota
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="text-muted small">Número da Rota</label>
+                    <div class="fw-bold fs-4">{{ route.route_number }}</div>
+                </div>
+                
+                {% if route.route_name %}
+                <div class="mb-3">
+                    <label class="text-muted small">Nome da Rota</label>
+                    <div>{{ route.route_name }}</div>
+                </div>
+                {% endif %}
+                
+                <div class="mb-3">
+                    <label class="text-muted small">Região</label>
+                    <div>
+                        <span class="badge bg-info">{{ route.region or 'Não definida' }}</span>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="text-muted small">Data da Rota</label>
+                        <div>{{ route.route_date.strftime('%d/%m/%Y') }}</div>
+                    </div>
+                    <div class="col-6">
+                        <label class="text-muted small">Status</label>
+                        <div>
+                            {% if route.status == 'planned' %}
+                                <span class="badge bg-warning">Planejada</span>
+                            {% elif route.status == 'in_progress' %}
+                                <span class="badge bg-primary">Em Curso</span>
+                            {% elif route.status == 'completed' %}
+                                <span class="badge bg-success">Concluída</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="text-muted small">Motorista</label>
+                        <div><i class="bi bi-person"></i> {{ route.driver.name }}</div>
+                    </div>
+                    <div class="col-6">
+                        <label class="text-muted small">Veículo</label>
+                        <div><i class="bi bi-truck"></i> {{ route.vehicle.model }} ({{ route.vehicle.plate }})</div>
+                    </div>
+                </div>
+                
+                <hr>
+                
+                <div class="row mb-3">
+                    <div class="col-6">
+                        <label class="text-muted small">Total de Entregas</label>
+                        <div class="fs-3 fw-bold text-primary">{{ total_orders }}</div>
+                    </div>
+                    <div class="col-6">
+                        <label class="text-muted small">Tempo Estimado</label>
+                        <div class="fs-3 fw-bold text-primary">{{ (total_estimated_time / 60)|int }}h {{ total_estimated_time % 60 }}min</div>
+                    </div>
+                </div>
+                
+                {% if route.notes %}
+                <div class="mb-3">
+                    <label class="text-muted small">Observações</label>
+                    <div class="small">{{ route.notes }}</div>
+                </div>
+                {% endif %}
+                
+                <div class="d-grid gap-2 mt-4">
+                    <button type="button" class="btn btn-optimize" id="optimizeBtn">
+                        <i class="bi bi-robot"></i> Otimizar Rota com IA
+                    </button>
+                    <a href="{{ url_for('routes.edit', id=route.id) }}" class="btn btn-outline-primary">
+                        <i class="bi bi-pencil"></i> Editar Rota
+                    </a>
+                    <button type="button" class="btn btn-outline-success" id="exportBtn">
+                        <i class="bi bi-download"></i> Exportar Rota (PDF/Excel)
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Lista de Entregas -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-ol"></i> Entregas em Ordem
+                </h5>
+                <div>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="printBtn">
+                        <i class="bi bi-printer"></i> Imprimir
+                    </button>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <div id="waypoints-list" class="list-group list-group-flush">
+                    {% for waypoint in waypoints %}
+                    <div class="list-group-item waypoint-card" data-id="{{ waypoint.order_id }}" data-sequence="{{ waypoint.sequence_order }}">
+                        <div class="d-flex justify-content-between align-items-start">
+                            <div class="d-flex align-items-center">
+                                <div class="drag-handle me-3">
+                                    <i class="bi bi-grip-vertical fs-4"></i>
+                                </div>
+                                <div class="text-center me-3">
+                                    <div class="sequence-number">{{ waypoint.sequence_order }}</div>
+                                    <small class="text-muted">Parada</small>
+                                </div>
+                                <div>
+                                    <div class="fw-bold">
+                                        Pedido #{{ waypoint.order.order_number }}
+                                        {% if waypoint.order.priority == 'urgent' %}
+                                            <span class="badge bg-danger ms-2">Urgente</span>
+                                        {% elif waypoint.order.priority == 'high' %}
+                                            <span class="badge bg-warning ms-2">Alta</span>
+                                        {% endif %}
+                                    </div>
+                                    <div class="mt-1">
+                                        <div><i class="bi bi-building"></i> <strong>{{ waypoint.order.client.name }}</strong></div>
+                                        <div class="text-muted small mt-1">
+                                            <i class="bi bi-geo-alt"></i> {{ waypoint.address.street }}<br>
+                                            {{ waypoint.address.postal_code }} {{ waypoint.address.city }}
+                                        </div>
+                                        {% if waypoint.address.delivery_instructions %}
+                                        <div class="text-muted small mt-1">
+                                            <i class="bi bi-info-circle"></i> {{ waypoint.address.delivery_instructions }}
+                                        </div>
+                                        {% endif %}
+                                        {% if waypoint.address.time_window_start %}
+                                        <div class="text-muted small mt-1">
+                                            <i class="bi bi-clock"></i> Horário preferencial: 
+                                            {{ waypoint.address.time_window_start.strftime('%H:%M') }} - 
+                                            {{ waypoint.address.time_window_end.strftime('%H:%M') }}
+                                        </div>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-outline-danger remove-waypoint" data-id="{{ waypoint.order_id }}" title="Remover desta rota">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="list-group-item text-center py-5 text-muted">
+                        <i class="bi bi-box display-4 d-block mb-3"></i>
+                        Nenhuma entrega nesta rota.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            <div class="card-footer bg-light">
+                <div class="row align-items-center">
+                    <div class="col-md-6">
+                        <small class="text-muted">
+                            <i class="bi bi-arrow-up-down"></i> Arraste as entregas para reordenar
+                        </small>
+                    </div>
+                    <div class="col-md-6 text-end">
+                        <span class="badge bg-primary">{{ total_orders }}</span> entregas
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Sortable.js para drag-and-drop
+var sortable = new Sortable(document.getElementById('waypoints-list'), {
+    animation: 150,
+    handle: '.drag-handle',
+    onEnd: function() {
+        updateSequenceNumbers();
+        saveNewOrder();
+    }
+});
+
+// Atualizar números de sequência visualmente
+function updateSequenceNumbers() {
+    var items = document.querySelectorAll('#waypoints-list .waypoint-card');
+    items.forEach(function(item, index) {
+        var seq = index + 1;
+        // Atualizar o número da sequência
+        item.querySelector('.sequence-number').textContent = seq;
+        item.setAttribute('data-sequence', seq);
+    });
+}
+
+// Salvar nova ordem no servidor
+function saveNewOrder() {
+    var order = [];
+    document.querySelectorAll('#waypoints-list .waypoint-card').forEach(function(item) {
+        order.push(item.getAttribute('data-id'));
+    });
+    
+    fetch(window.location.href + '/reorder', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ order: order })
+    }).then(response => {
+        if (!response.ok) {
+            alert('Erro ao salvar nova ordem');
+        } else {
+            showToast('Ordem das entregas atualizada!', 'success');
+        }
+    });
+}
+
+// Remover entrega da rota
+document.querySelectorAll('.remove-waypoint').forEach(btn => {
+    btn.addEventListener('click', function() {
+        var orderId = this.getAttribute('data-id');
+        if (confirm('Remover esta entrega da rota?')) {
+            fetch(window.location.href + '/remove/' + orderId, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            }).then(response => {
+                if (response.ok) {
+                    location.reload();
+                } else {
+                    alert('Erro ao remover entrega');
+                }
+            });
+        }
+    });
+});
+
+// Otimizar rota com IA
+document.getElementById('optimizeBtn')?.addEventListener('click', function() {
+    if (confirm('A IA vai reordenar automaticamente todas as entregas para otimizar a rota. Deseja continuar?')) {
+        fetch(window.location.href + '/optimize', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        }).then(response => {
+            if (response.ok) {
+                location.reload();
+            } else {
+                alert('Erro ao otimizar rota');
+            }
+        });
+    }
+});
+
+// Imprimir rota
+document.getElementById('printBtn')?.addEventListener('click', function() {
+    window.print();
+});
+
+// Exportar rota
+document.getElementById('exportBtn')?.addEventListener('click', function() {
+    window.location.href = window.location.href + '/export';
+});
+
+// Função auxiliar para mostrar notificações
+function showToast(message, type) {
+    // Implementar toast notification
+    alert(message);
+}
+
+// Estilos para impressão
+var style = document.createElement('style');
+style.textContent = `
+    @media print {
+        .sidebar, .btn, .drag-handle, .remove-waypoint, .card-header .btn {
+            display: none !important;
+        }
+        .col-md-4, .col-md-8 {
+            width: 100% !important;
+        }
+        .card {
+            border: none !important;
+            box-shadow: none !important;
+        }
+        .waypoint-card {
+            break-inside: avoid;
+            page-break-inside: avoid;
+        }
+    }
+`;
+document.head.appendChild(style);
+</script>
+{% endblock %}
