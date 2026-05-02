@@ -849,28 +849,25 @@ def navigate(id):
                     'type': 'start_end'
                 })
     
-    # Construir URL da rota completa do Google Maps (formato correto)
+        # Construir URL da rota completa do Google Maps com navegação ativada
     full_route_google = ""
     if len(google_waypoints) >= 2:
-        # Formato: https://www.google.com/maps/dir/Origem/Destino/parada1/parada2/parada3
-        # ou com waypoints: https://www.google.com/maps/dir/Origem/Destino/?waypoints=lat1,lng1|lat2,lng2
+        # Formato: NÃO definir origem para que use "minha localização"
+        # Assim o usuário pode navegar a partir de onde está
         
-        origin = f"{google_waypoints[0]['lat']},{google_waypoints[0]['lng']}"
         destination = f"{google_waypoints[-1]['lat']},{google_waypoints[-1]['lng']}"
         
-        # Waypoints intermediários (excluindo origem e destino)
-        intermediate = google_waypoints[1:-1]
+        # Waypoints intermediários (excluindo destino final)
+        intermediate = google_waypoints[:-1]  # Todos exceto o último (já é destino)
         
-        # Versão alternativa do URL (formato antigo do Google Maps)
         if intermediate:
-            # Formato antigo: /Origem/parada1/parada2/Destino
-            all_points = [origin] + [f"{wp['lat']},{wp['lng']}" for wp in intermediate] + [destination]
-            full_route_google = f"https://www.google.com/maps/dir/{'/'.join(all_points)}?travelmode=driving"
+            # Construir waypoints para o Google Maps
+            waypoints_str = "|".join([f"{wp['lat']},{wp['lng']}" for wp in intermediate])
+            # URL com parâmetros corretos para navegação
+            full_route_google = f"https://www.google.com/maps/dir/?api=1&destination={destination}&waypoints={waypoints_str}&travelmode=driving&dir_action=navigate"
         else:
-            full_route_google = f"https://www.google.com/maps/dir/{origin}/{destination}/?travelmode=driving"
-        
-        # Teste com URL curta para menos de 10 pontos
-        print(f"URL da rota completa: {full_route_google}")
+            # Apenas destino
+            full_route_google = f"https://www.google.com/maps/dir/?api=1&destination={destination}&travelmode=driving&dir_action=navigate"
     
     return render_template('routes/navigate.html', 
                          route=route, 
