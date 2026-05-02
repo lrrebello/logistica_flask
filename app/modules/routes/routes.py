@@ -1029,3 +1029,43 @@ def eurowag_navigation(id):
     else:
         flash('Não foi possível gerar rota para Eurowag (faltam coordenadas?)', 'danger')
         return redirect(url_for('routes.view', id=id))
+
+@routes_bp.route('/<int:route_id>/waypoint/<int:waypoint_id>/complete', methods=['POST'])
+@login_required
+def complete_waypoint(route_id, waypoint_id):
+    """Marcar uma parada como entregue"""
+    waypoint = RouteWaypoint.query.get_or_404(waypoint_id)
+    
+    if waypoint.route_id != route_id:
+        return jsonify({'error': 'Waypoint não pertence a esta rota'}), 400
+    
+    waypoint.status = 'completed'
+    waypoint.delivered_at = datetime.utcnow()
+    
+    if waypoint.order:
+        waypoint.order.status = 'delivered'
+        waypoint.order.delivered_at = datetime.utcnow()
+    
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Entrega registada com sucesso!'})
+
+@routes_bp.route('/<int:route_id>/waypoint/<int:waypoint_id>/undo', methods=['POST'])
+@login_required
+def undo_waypoint(route_id, waypoint_id):
+    """Desmarcar uma parada como entregue"""
+    waypoint = RouteWaypoint.query.get_or_404(waypoint_id)
+    
+    if waypoint.route_id != route_id:
+        return jsonify({'error': 'Waypoint não pertence a esta rota'}), 400
+    
+    waypoint.status = 'pending'
+    waypoint.delivered_at = None
+    
+    if waypoint.order:
+        waypoint.order.status = 'confirmed'
+        waypoint.order.delivered_at = None
+    
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Entrega desmarcada!'})
