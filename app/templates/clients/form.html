@@ -7,12 +7,12 @@
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
-        <div class="card mb-4">
-            <div class="card-header bg-white py-3">
-                <h5 class="mb-0">Informações Básicas</h5>
-            </div>
-            <div class="card-body p-4">
-                <form method="POST">
+        <form method="POST">
+            <div class="card mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Informações Básicas</h5>
+                </div>
+                <div class="card-body p-4">
                     <div class="mb-3">
                         <label for="name" class="form-label">Nome Completo / Razão Social</label>
                         <input type="text" class="form-control" id="name" name="name" value="{{ client.name if client else '' }}" required>
@@ -20,8 +20,8 @@
                     
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="tax_id" class="form-label">CPF / CNPJ</label>
-                            <input type="text" class="form-control" id="tax_id" name="tax_id" value="{{ client.tax_id if client else '' }}">
+                            <label for="nif" class="form-label">NIF</label>
+                            <input type="text" class="form-control" id="nif" name="nif" value="{{ client.nif if client else '' }}" placeholder="123456789">
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="phone" class="form-label">Telefone</label>
@@ -33,17 +33,48 @@
                         <label for="email" class="form-label">E-mail</label>
                         <input type="email" class="form-control" id="email" name="email" value="{{ client.email if client else '' }}">
                     </div>
-                    
-                    <div class="d-flex justify-content-end gap-2 mt-4">
-                        <a href="{{ url_for('clients.list') }}" class="btn btn-light">Cancelar</a>
-                        <button type="submit" class="btn btn-primary px-4">Salvar Cliente</button>
-                    </div>
-                </form>
+                </div>
             </div>
-        </div>
 
+            <!-- ========================================== -->
+            <!-- CONFIGURAÇÃO DE TEMPO DE PARADA (ADICIONAR AQUI) -->
+            <!-- ========================================== -->
+            <div class="card mb-3">
+                <div class="card-header bg-white py-3">
+                    <h6 class="mb-0"><i class="bi bi-clock"></i> Configuração de Tempo de Parada</h6>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <label class="form-label">Tipo de Estabelecimento</label>
+                            <select name="stop_time_config_id" class="form-select">
+                                <option value="">Selecione...</option>
+                                {% for config in stop_time_configs %}
+                                <option value="{{ config.id }}" {% if client and client.stop_time_config_id == config.id %}selected{% endif %}>
+                                    {{ config.name }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                            <div class="form-text">Selecionar o tipo define os tempos padrão de descarga</div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Tempo Customizado (minutos)</label>
+                            <input type="number" name="custom_stop_time" class="form-control" value="{{ client.custom_stop_time if client else '' }}" placeholder="Deixar vazio para usar padrão">
+                            <div class="form-text">Tempo total estimado para descarga + pagamento + documentação</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="d-flex justify-content-end gap-2 mt-4">
+                <a href="{{ url_for('clients.list') }}" class="btn btn-light">Cancelar</a>
+                <button type="submit" class="btn btn-primary px-4">Salvar Cliente</button>
+            </div>
+        </form>
+
+        <!-- Seção de endereços (se existir) -->
         {% if client and client.addresses %}
-        <div class="card">
+        <div class="card mt-4">
             <div class="card-header d-flex justify-content-between align-items-center bg-white py-3">
                 <h5 class="mb-0">Endereços Cadastrados</h5>
                 <a href="{{ url_for('clients.address_new', client_id=client.id) }}" class="btn btn-outline-success btn-sm">
@@ -66,6 +97,11 @@
                                         <span class="badge bg-success">Ponto de Entrega</span>
                                     {% endif %}
                                 </div>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="alert('Em desenvolvimento')">
+                                    <i class="bi bi-trash"></i>
+                                </button>
                             </div>
                         </div>
                     </li>

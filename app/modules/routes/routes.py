@@ -8,6 +8,31 @@ import uuid
 
 routes_bp = Blueprint('routes', __name__)
 
+def calculate_stop_time(waypoint):
+    """Calcula tempo total de parada em minutos baseado no tipo de cliente"""
+    
+    # Tempo base padrão
+    base_time = 15
+    
+    if waypoint.order and waypoint.order.client:
+        # Verificar configuração customizada
+        if waypoint.order.client.custom_stop_time:
+            return waypoint.order.client.custom_stop_time
+        
+        # Buscar configuração por tipo de estabelecimento
+        if waypoint.order.client.stop_time_config:
+            config = waypoint.order.client.stop_time_config
+            # Calcular tempo baseado na quantidade de produtos
+            total_units = sum(item.quantity for item in waypoint.order.items) if waypoint.order.items else 1
+            unloading_time = min(config.unloading_time_per_unit * total_units, 30)  # max 30 min descarga
+            return config.base_time + unloading_time + config.payment_time + config.documentation_time + config.setup_time
+    
+    # Estimar baseado na prioridade
+    if waypoint.order and waypoint.order.priority == 'urgent':
+        return base_time - 5  # Urgentes são mais rápidos
+    
+    return base_time
+
 @routes_bp.route('/')
 @login_required
 def list():
@@ -286,15 +311,19 @@ def reorder_waypoints(id):
     data = request.get_json()
     order = data.get('order', [])
     
+    # Criar um dicionário para mapear order_id para waypoint
+    waypoint_map = {wp.order_id: wp for wp in route.waypoints if wp.order_id}
+    
     for seq, order_id in enumerate(order, 1):
-        waypoint = RouteWaypoint.query.filter_by(route_id=id, order_id=order_id).first()
-        if waypoint:
+        if order_id in waypoint_map:
+            waypoint = waypoint_map[order_id]
             waypoint.sequence_order = seq
             waypoint.is_optimized = False
             waypoint.optimized_by = 'manual'
     
     route.was_optimized = False
     db.session.commit()
+    
     return jsonify({'success': True})
 
 @routes_bp.route('/<int:route_id>/remove/<int:order_id>', methods=['POST'])
@@ -320,29 +349,258 @@ def remove_waypoint(route_id, order_id):
 @routes_bp.route('/<int:id>/optimize', methods=['POST'])
 @login_required
 def optimize_route(id):
-    """Otimizar rota com algoritmo inteligente"""
+    """Otimização com análise de viabilidade de horários"""
     route = Route.query.get_or_404(id)
-    waypoints = list(route.waypoints)
     
-    # Algoritmo de otimização (TSP simplificado)
-    # Ordenar por: prioridade (urgente > alta > normal) e depois por região/cidade
-    waypoints.sort(key=lambda w: (
-        0 if w.order.priority == 'urgent' else 1 if w.order.priority == 'high' else 2,
-        w.address.city
-    ))
+    import math
+    from datetime import datetime, timedelta
     
-    for seq, waypoint in enumerate(waypoints, 1):
-        waypoint.sequence_order = seq
-        waypoint.is_optimized = True
-        waypoint.optimized_by = 'ai'
+    def haversine_distance(lat1, lon1, lat2, lon2):
+        R = 6371
+        if not lat1 or not lon1 or not lat2 or not lon2:
+            return 30
+        lat1, lon1, lat2, lon2 = map(math.radians, [lat1, lon1, lat2, lon2])
+        dlat = lat2 - lat1
+        dlon = lon2 - lon1
+        a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+        return R * 2 * math.asin(math.sqrt(a))
+    
+    def calculate_travel_time(origin, destination):
+        """Estima tempo de viagem em minutos"""
+        if not origin or not destination:
+            return 30
+        if not hasattr(origin, 'address') or not origin.address:
+            return 30
+        if not destination.address:
+            return 30
+        
+        lat1 = origin.address.latitude
+        lon1 = origin.address.longitude
+        lat2 = destination.address.latitude
+        lon2 = destination.address.longitude
+        
+        if not lat1 or not lon1 or not lat2 or not lon2:
+            return 30
+        
+        dist = haversine_distance(lat1, lon1, lat2, lon2)
+        # Velocidade média: 40 km/h em zona urbana, 80 em autoestrada
+        speed = 50 if 'autoestrada' in str(origin.address.city).lower() else 40
+        return max(5, int((dist / speed) * 60))
+    
+    # Separar pontos
+    start_point = None
+    end_point = None
+    deliveries = []
+    
+    for wp in route.waypoints:
+        if wp.order_id is None:
+            if start_point is None:
+                start_point = wp
+            else:
+                end_point = wp
+        else:
+            deliveries.append(wp)
+    
+    if len(deliveries) <= 1:
+        return jsonify({'success': False, 'message': 'Não há entregas suficientes'})
+    
+    # Hora de início (08:00 padrão, mas pode vir do motorista)
+    start_time = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
+    current_time = start_time
+    current_pos = start_point
+    
+    results = []
+    time_buffer = 0  # Buffer para imprevistos
+    
+    for wp in deliveries:
+        travel_time = calculate_travel_time(current_pos, wp)
+        arrival_time = current_time + timedelta(minutes=travel_time + time_buffer)
+        
+        # Tempo de serviço (20 min padrão)
+        service_time = 20
+        
+        # Analisar janela de horário
+        window_start = None
+        window_end = None
+        has_reabertura = False
+        reabertura_time = None
+        is_feasible = True
+        status = "ok"
+        message = ""
+        
+        if wp.address and wp.address.time_window_start and wp.address.time_window_end:
+            window_start = datetime.now().replace(
+                hour=wp.address.time_window_start.hour,
+                minute=wp.address.time_window_start.minute
+            )
+            window_end = datetime.now().replace(
+                hour=wp.address.time_window_end.hour,
+                minute=wp.address.time_window_end.minute
+            )
+            
+            # Se a janela já passou hoje
+            if window_end < datetime.now():
+                # Verificar se há reabertura (exemplo: 14:00-15:00)
+                # Por enquanto, consideramos reabertura em 50 min (como no seed)
+                if wp.notes and "Reabertura" in wp.notes:
+                    has_reabertura = True
+                    # Extrair minutos da reabertura da nota
+                    import re
+                    match = re.search(r'(\d+)\s*min', wp.notes)
+                    if match:
+                        reabertura_min = int(match.group(1))
+                        reabertura_time = datetime.now() + timedelta(minutes=reabertura_min)
+                        is_feasible = True
+                        status = "reabertura"
+                        message = f"Janela fechada. Reabertura às {reabertura_time.strftime('%H:%M')}"
+                    else:
+                        is_feasible = False
+                        status = "impossivel"
+                        message = "Janela de entrega já fechada sem previsão de reabertura"
+                else:
+                    is_feasible = False
+                    status = "impossivel"
+                    message = "Janela de entrega já fechada para hoje"
+            
+            # Se ainda não passou, verificar se chegamos a tempo
+            elif arrival_time > window_end:
+                # Vamos chegar atrasado
+                time_diff = (arrival_time - window_end).seconds / 60
+                if wp.order.priority == 'urgent' and time_diff <= 30:
+                    status = "atraso_leve"
+                    message = f"Atraso estimado de {int(time_diff)} min"
+                elif wp.order.priority == 'urgent':
+                    status = "atraso_grave"
+                    message = f"Atraso significativo de {int(time_diff)} min"
+                else:
+                    is_feasible = False
+                    status = "impossivel"
+                    message = f"Não será possível chegar a tempo (atraso de {int(time_diff)} min)"
+            
+            # Chegamos dentro da janela
+            else:
+                status = "ok"
+                message = f"Chegada prevista: {arrival_time.strftime('%H:%M')} (janela: {window_start.strftime('%H:%M')}-{window_end.strftime('%H:%M')})"
+        
+        # Calcular urgência (quanto maior, mais prioritário)
+        urgency = 0
+        if wp.order.priority == 'urgent':
+            urgency = 100
+        elif wp.order.priority == 'high':
+            urgency = 60
+        else:
+            urgency = 30
+        
+        # Penalizar quem está perdendo prazo
+        if status == "atraso_leve":
+            urgency += 150
+        elif status == "atraso_grave":
+            urgency += 300
+        elif status == "reabertura":
+            urgency += 80
+        elif status == "impossivel":
+            urgency = 1000  # Prioridade máxima para avisar
+        
+        results.append({
+            'waypoint': wp,
+            'arrival_time': arrival_time,
+            'urgency': urgency,
+            'status': status,
+            'message': message,
+            'is_feasible': is_feasible,
+            'service_time': service_time,
+            'travel_time': travel_time
+        })
+        
+        # Atualizar para próxima iteração (apenas se for viável continuar)
+        if is_feasible:
+            current_time = arrival_time + timedelta(minutes=service_time)
+            current_pos = wp
+        else:
+            # Não avança para os próximos se este é impossível
+            # Isso ajuda a identificar o ponto de falha
+            pass
+    
+    # Separar por status
+    impossible = [r for r in results if not r['is_feasible']]
+    reabertura = [r for r in results if r['status'] == 'reabertura']
+    atrasados = [r for r in results if r['status'] in ['atraso_leve', 'atraso_grave']]
+    ok = [r for r in results if r['status'] == 'ok']
+    
+    # Ordenar para otimização
+    if impossible:
+        # Se há entregas impossíveis, colocar no início para avisar
+        results.sort(key=lambda r: (
+            -r['urgency'],  # Urgência inversa
+            r['arrival_time']
+        ))
+    else:
+        # Ordenar normal: urgência > tempo de chegada
+        results.sort(key=lambda r: (
+            -r['urgency'],
+            r['arrival_time']
+        ))
+    
+    # Montar sequência final
+    new_sequence = []
+    if start_point:
+        new_sequence.append(start_point)
+    
+    for r in results:
+        new_sequence.append(r['waypoint'])
+    
+    if end_point:
+        new_sequence.append(end_point)
+    
+    # Aplicar ordem
+    for seq, wp in enumerate(new_sequence, 1):
+        wp.sequence_order = seq
+        if wp.order_id:
+            wp.is_optimized = True
+            wp.optimized_by = 'ai_timewindow'
+            # Salvar informações de viabilidade na nota
+            for r in results:
+                if r['waypoint'].id == wp.id:
+                    if r['status'] != 'ok':
+                        wp.notes = f"[VIABILIDADE] {r['message']}"
+                    break
     
     route.was_optimized = True
     route.last_optimization_date = datetime.utcnow()
-    route.optimization_method = 'ai_basic'
-    route.optimization_score = 0.95  # Score fictício
+    route.optimization_method = 'time_window'
     
     db.session.commit()
-    return jsonify({'success': True})
+    
+    # Gerar relatório completo
+    report = []
+    if impossible:
+        report.append(f"❌ ENTREGAS IMPOSSÍVEIS: {len(impossible)}")
+        for r in impossible:
+            report.append(f"   - #{r['waypoint'].order.order_number}: {r['message']}")
+    
+    if reabertura:
+        report.append(f"⚠️ ENTREGAS COM REABERTURA: {len(reabertura)}")
+        for r in reabertura:
+            report.append(f"   - #{r['waypoint'].order.order_number}: {r['message']}")
+    
+    if atrasados:
+        report.append(f"⚠️ ENTREGAS COM ATRASO: {len(atrasados)}")
+        for r in atrasados:
+            report.append(f"   - #{r['waypoint'].order.order_number}: {r['message']}")
+    
+    report.append(f"✅ ENTREGAS OK: {len(ok)}")
+    
+    return jsonify({
+        'success': True,
+        'message': "\n".join(report),
+        'details': {
+            'total_entregas': len(deliveries),
+            'impossiveis': len(impossible),
+            'reabertura': len(reabertura),
+            'atrasados': len(atrasados),
+            'ok': len(ok)
+        }
+    })
 
 @routes_bp.route('/<int:id>/map')
 @login_required

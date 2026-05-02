@@ -187,39 +187,57 @@
                                     <small class="text-muted">Parada</small>
                                 </div>
                                 <div>
-                                    <div class="fw-bold">
-                                        Pedido #{{ waypoint.order.order_number }}
-                                        {% if waypoint.order.priority == 'urgent' %}
-                                            <span class="badge bg-danger ms-2">Urgente</span>
-                                        {% elif waypoint.order.priority == 'high' %}
-                                            <span class="badge bg-warning ms-2">Alta</span>
-                                        {% endif %}
-                                    </div>
-                                    <div class="mt-1">
-                                        <div><i class="bi bi-building"></i> <strong>{{ waypoint.order.client.name }}</strong></div>
-                                        <div class="text-muted small mt-1">
-                                            <i class="bi bi-geo-alt"></i> {{ waypoint.address.street }}<br>
-                                            {{ waypoint.address.postal_code }} {{ waypoint.address.city }}
+                                    {% if waypoint.order %}
+                                        <div class="fw-bold">
+                                            Pedido #{{ waypoint.order.order_number }}
+                                            {% if waypoint.order.priority == 'urgent' %}
+                                                <span class="badge bg-danger ms-2">Urgente</span>
+                                            {% elif waypoint.order.priority == 'high' %}
+                                                <span class="badge bg-warning ms-2">Alta</span>
+                                            {% endif %}
                                         </div>
-                                        {% if waypoint.address.delivery_instructions %}
-                                        <div class="text-muted small mt-1">
-                                            <i class="bi bi-info-circle"></i> {{ waypoint.address.delivery_instructions }}
+                                        <div class="mt-1">
+                                            <div><i class="bi bi-building"></i> <strong>{{ waypoint.order.client.name }}</strong></div>
+                                            <div class="text-muted small mt-1">
+                                                <i class="bi bi-geo-alt"></i> {{ waypoint.address.street }}<br>
+                                                {{ waypoint.address.postal_code }} {{ waypoint.address.city }}
+                                            </div>
+                                            {% if waypoint.address.delivery_instructions %}
+                                            <div class="text-muted small mt-1">
+                                                <i class="bi bi-info-circle"></i> {{ waypoint.address.delivery_instructions }}
+                                            </div>
+                                            {% endif %}
+                                            {% if waypoint.address.time_window_start %}
+                                            <div class="text-muted small mt-1">
+                                                <i class="bi bi-clock"></i> Horário preferencial: 
+                                                {{ waypoint.address.time_window_start.strftime('%H:%M') }} - 
+                                                {{ waypoint.address.time_window_end.strftime('%H:%M') }}
+                                            </div>
+                                            {% endif %}
                                         </div>
-                                        {% endif %}
-                                        {% if waypoint.address.time_window_start %}
-                                        <div class="text-muted small mt-1">
-                                            <i class="bi bi-clock"></i> Horário preferencial: 
-                                            {{ waypoint.address.time_window_start.strftime('%H:%M') }} - 
-                                            {{ waypoint.address.time_window_end.strftime('%H:%M') }}
+                                    {% else %}
+                                        <div class="fw-bold text-primary">
+                                            <i class="bi bi-house-door"></i> Centralrest - Fábrica
                                         </div>
-                                        {% endif %}
-                                    </div>
+                                        <div class="mt-1">
+                                            <div><i class="bi bi-building"></i> <strong>Centralrest - Fábrica Ílhavo</strong></div>
+                                            <div class="text-muted small mt-1">
+                                                <i class="bi bi-geo-alt"></i> {{ waypoint.address.street }}<br>
+                                                {{ waypoint.address.postal_code }} {{ waypoint.address.city }}
+                                            </div>
+                                            <div class="text-muted small mt-1">
+                                                <i class="bi bi-flag-checkered"></i> Ponto de partida e retorno
+                                            </div>
+                                        </div>
+                                    {% endif %}
                                 </div>
                             </div>
                             <div>
+                                {% if waypoint.order %}
                                 <button type="button" class="btn btn-sm btn-outline-danger remove-waypoint" data-id="{{ waypoint.order_id }}" title="Remover desta rota">
                                     <i class="bi bi-x-lg"></i>
                                 </button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
