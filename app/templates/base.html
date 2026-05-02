@@ -10,7 +10,6 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        /* Variáveis de cores para light/dark mode */
         :root {
             --bs-primary: #2563eb;
             --bs-secondary: #6b7280;
@@ -20,7 +19,6 @@
             --bs-info: #3b82f6;
         }
         
-        /* Dark mode - cores personalizadas */
         [data-bs-theme="dark"] {
             --bs-body-bg: #111827;
             --bs-body-color: #e5e7eb;
@@ -81,7 +79,6 @@
             background-color: #1f2937;
         }
         
-        /* Botão de toggle do modo escuro */
         .theme-toggle {
             background: none;
             border: none;
@@ -93,10 +90,13 @@
         }
         
         .theme-toggle:hover {
+            background-color: rgba(0,0,0,0.1);
+        }
+        
+        [data-bs-theme="dark"] .theme-toggle:hover {
             background-color: rgba(255,255,255,0.1);
         }
         
-        /* Estilos gerais */
         * {
             -webkit-tap-highlight-color: transparent;
         }
@@ -112,7 +112,6 @@
             background-color: #111827;
         }
         
-        /* Restante do CSS igual ao que já tinha... */
         .sidebar {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
@@ -225,11 +224,20 @@
             border-bottom: 1px solid #e5e7eb;
         }
         
+        [data-bs-theme="dark"] .mobile-header {
+            background: #1f2937;
+            border-bottom-color: #374151;
+        }
+        
         .mobile-header .page-title {
             font-size: 1.1rem;
             font-weight: 600;
             margin: 0;
             color: #1f2937;
+        }
+        
+        [data-bs-theme="dark"] .mobile-header .page-title {
+            color: #e5e7eb;
         }
         
         .user-info-mobile {
@@ -411,51 +419,13 @@
                 </div>
                 
                 <ul class="nav flex-column">
+                    {% for item in menu_items %}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.endpoint == 'core.dashboard' %}active{% endif %}" href="{{ url_for('core.dashboard') }}">
-                            <i class="bi bi-speedometer2"></i> Dashboard
+                        <a class="nav-link" href="{{ url_for(item.url) }}">
+                            <i class="{{ item.icon }}"></i> {{ item.name }}
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'suppliers' in request.endpoint %}active{% endif %}" href="{{ url_for('suppliers.list') }}">
-                            <i class="bi bi-building"></i> Fornecedores
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'products' in request.endpoint %}active{% endif %}" href="{{ url_for('products.list') }}">
-                            <i class="bi bi-box-seam"></i> Produtos
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'stock' in request.endpoint %}active{% endif %}" href="{{ url_for('stock.list') }}">
-                            <i class="bi bi-pie-chart"></i> Estoque
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'clients' in request.endpoint %}active{% endif %}" href="{{ url_for('clients.list') }}">
-                            <i class="bi bi-people"></i> Clientes
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'orders' in request.endpoint %}active{% endif %}" href="{{ url_for('orders.list') }}">
-                            <i class="bi bi-cart-check"></i> Pedidos
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'routes' in request.endpoint %}active{% endif %}" href="{{ url_for('routes.list') }}">
-                            <i class="bi bi-map"></i> Rotas
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'vehicles' in request.endpoint %}active{% endif %}" href="{{ url_for('vehicles.list') }}">
-                            <i class="bi bi-truck"></i> Veículos
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'drivers' in request.endpoint %}active{% endif %}" href="{{ url_for('drivers.list') }}">
-                            <i class="bi bi-person-badge"></i> Motoristas
-                        </a>
-                    </li>
+                    {% endfor %}
                 </ul>
                 
                 <hr class="bg-light">
@@ -514,7 +484,6 @@
         const themeToggle = document.getElementById('themeToggle');
         const themeIcon = document.getElementById('themeIcon');
         
-        // Verificar preferência salva ou do sistema
         function getInitialTheme() {
             const savedTheme = localStorage.getItem('theme');
             if (savedTheme) {
@@ -536,13 +505,14 @@
             }
         }
         
-        themeToggle.addEventListener('click', () => {
-            const currentTheme = document.documentElement.getAttribute('data-bs-theme');
-            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-            setTheme(newTheme);
-        });
+        if (themeToggle) {
+            themeToggle.addEventListener('click', () => {
+                const currentTheme = document.documentElement.getAttribute('data-bs-theme');
+                const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                setTheme(newTheme);
+            });
+        }
         
-        // Aplicar tema inicial
         setTheme(getInitialTheme());
         
         // Menu hambúrguer

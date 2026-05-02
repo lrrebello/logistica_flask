@@ -10,6 +10,38 @@ def create_app(config_class=Config):
     db.init_app(app)
     login_manager.init_app(app)
 
+    # Context processor para disponibilizar menu em todos os templates
+    @app.context_processor
+    def inject_menu():
+        from flask_login import current_user
+        menu_items = []
+        if current_user.is_authenticated:
+            if current_user.role == 'admin':
+                menu_items = [
+                    {'url': 'core.dashboard', 'icon': 'bi bi-speedometer2', 'name': 'Dashboard'},
+                    {'url': 'suppliers.list', 'icon': 'bi bi-building', 'name': 'Fornecedores'},
+                    {'url': 'products.list', 'icon': 'bi bi-box-seam', 'name': 'Produtos'},
+                    {'url': 'stock.list', 'icon': 'bi bi-pie-chart', 'name': 'Estoque'},
+                    {'url': 'clients.list', 'icon': 'bi bi-people', 'name': 'Clientes'},
+                    {'url': 'orders.list', 'icon': 'bi bi-cart-check', 'name': 'Pedidos'},
+                    {'url': 'routes.list', 'icon': 'bi bi-map', 'name': 'Rotas'},
+                    {'url': 'vehicles.list', 'icon': 'bi bi-truck', 'name': 'Veículos'},
+                    {'url': 'drivers.list', 'icon': 'bi bi-person-badge', 'name': 'Motoristas'},
+                ]
+            elif current_user.role == 'user':
+                menu_items = [
+                    {'url': 'core.dashboard', 'icon': 'bi bi-speedometer2', 'name': 'Dashboard'},
+                    {'url': 'clients.list', 'icon': 'bi bi-people', 'name': 'Clientes'},
+                    {'url': 'orders.list', 'icon': 'bi bi-cart-check', 'name': 'Pedidos'},
+                    {'url': 'routes.list', 'icon': 'bi bi-map', 'name': 'Rotas'},
+                ]
+            elif current_user.role == 'driver':
+                menu_items = [
+                    {'url': 'core.dashboard', 'icon': 'bi bi-speedometer2', 'name': 'Dashboard'},
+                    {'url': 'routes.list', 'icon': 'bi bi-map', 'name': 'Minhas Rotas'},
+                ]
+        return {'menu_items': menu_items}
+    
     # Registrar Blueprints
     from app.modules.auth.routes import auth_bp
     from app.modules.clients.routes import clients_bp

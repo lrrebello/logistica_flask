@@ -1,5 +1,5 @@
 import os
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response, current_app
 from flask_login import login_required, current_user
 from app.models import Route, RouteWaypoint, Driver, Vehicle, Order, Address
 from app.extensions import db
@@ -1049,6 +1049,24 @@ def complete_waypoint(route_id, waypoint_id):
     db.session.commit()
     
     return jsonify({'success': True, 'message': 'Entrega registada com sucesso!'})
+@routes_bp.route('/driver/routes')
+@login_required
+def driver_routes():
+    """Motorista vê apenas as suas rotas"""
+    if current_user.role != 'driver':
+        flash('Acesso negado', 'danger')
+        return redirect(url_for('core.dashboard'))
+    
+    # Verificar se o motorista tem perfil
+    driver = Driver.query.filter_by(user_id=current_user.id).first()
+    if not driver:
+        flash('Perfil de motorista não encontrado', 'danger')
+        return redirect(url_for('core.dashboard'))
+    
+    page = request.args.get('page', 1, type=int)
+    routes = Route.query.filter_by(driver_id=driver.id).paginate(page=page, per_page=10)
+    return render_template('routes/list.html', routes=routes)
+
 
 @routes_bp.route('/<int:route_id>/waypoint/<int:waypoint_id>/undo', methods=['POST'])
 @login_required
