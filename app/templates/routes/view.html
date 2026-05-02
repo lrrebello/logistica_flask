@@ -60,6 +60,15 @@
         background: linear-gradient(135deg, #059669 0%, #047857 100%);
         color: white;
     }
+    .btn-eurowag {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        border: none;
+        color: white;
+    }
+    .btn-eurowag:hover {
+        background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%);
+        color: white;
+    }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@latest/css/sortable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -149,11 +158,28 @@
                     <button type="button" class="btn btn-optimize" id="optimizeBtn">
                         <i class="bi bi-robot"></i> Otimizar Rota com IA
                     </button>
-                    <a href="{{ url_for('routes.edit', id=route.id) }}" class="btn btn-outline-primary">
-                        <i class="bi bi-pencil"></i> Editar Rota
+                    {% if route.driver.ew_driver_id %}
+                    <a href="{{ url_for('routes.eurowag_navigation', id=route.id) }}" class="btn btn-eurowag">
+                        <i class="bi bi-truck"></i> Navegar com Eurowag
                     </a>
-                    <button type="button" class="btn btn-outline-success" id="exportBtn">
-                        <i class="bi bi-download"></i> Exportar Rota (PDF/Excel)
+                    {% endif %}
+                    <div class="btn-group">
+                        <a href="{{ url_for('routes.view_map', id=route.id) }}" class="btn btn-outline-info">
+                            <i class="bi bi-map"></i> Ver Mapa
+                        </a>
+                        <a href="{{ url_for('routes.edit', id=route.id) }}" class="btn btn-outline-primary">
+                            <i class="bi bi-pencil"></i> Editar
+                        </a>
+                        <button type="button" class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split" data-bs-toggle="dropdown" aria-expanded="false">
+                            <span class="visually-hidden">Exportar</span>
+                        </button>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="{{ url_for('routes.export_gpx', id=route.id) }}"><i class="bi bi-sd-card"></i> GPX (Garmin/TomTom)</a></li>
+                            <li><a class="dropdown-item" href="{{ url_for('routes.export_kml', id=route.id) }}"><i class="bi bi-google"></i> KML (Google Earth)</a></li>
+                        </ul>
+                    </div>
+                    <button type="button" class="btn btn-outline-success" id="printBtn">
+                        <i class="bi bi-printer"></i> Imprimir Roteiro
                     </button>
                 </div>
             </div>
@@ -168,9 +194,7 @@
                     <i class="bi bi-list-ol"></i> Entregas em Ordem
                 </h5>
                 <div>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="printBtn">
-                        <i class="bi bi-printer"></i> Imprimir
-                    </button>
+                    <span class="badge bg-primary">{{ total_orders }}</span> entregas
                 </div>
             </div>
             <div class="card-body p-0">
@@ -209,9 +233,21 @@
                                             {% endif %}
                                             {% if waypoint.address.time_window_start %}
                                             <div class="text-muted small mt-1">
-                                                <i class="bi bi-clock"></i> Horário preferencial: 
+                                                <i class="bi bi-clock"></i> Horário: 
                                                 {{ waypoint.address.time_window_start.strftime('%H:%M') }} - 
                                                 {{ waypoint.address.time_window_end.strftime('%H:%M') }}
+                                            </div>
+                                            {% endif %}
+                                            {% if waypoint.order.client.custom_stop_time or waypoint.order.client.stop_time_config %}
+                                            <div class="text-muted small mt-1">
+                                                <i class="bi bi-hourglass-split"></i> Tempo estimado parada: 
+                                                {% if waypoint.order.client.custom_stop_time %}
+                                                    {{ waypoint.order.client.custom_stop_time }} min
+                                                {% elif waypoint.order.client.stop_time_config %}
+                                                    {{ waypoint.order.client.stop_time_config.total_time }} min
+                                                {% else %}
+                                                    20 min
+                                                {% endif %}
                                             </div>
                                             {% endif %}
                                         </div>
@@ -222,8 +258,7 @@
                                         <div class="mt-1">
                                             <div><i class="bi bi-building"></i> <strong>Centralrest - Fábrica Ílhavo</strong></div>
                                             <div class="text-muted small mt-1">
-                                                <i class="bi bi-geo-alt"></i> {{ waypoint.address.street }}<br>
-                                                {{ waypoint.address.postal_code }} {{ waypoint.address.city }}
+                                                <i class="bi bi-geo-alt"></i> Zona Industrial de Ílhavo, Lote 42, Ílhavo
                                             </div>
                                             <div class="text-muted small mt-1">
                                                 <i class="bi bi-flag-checkered"></i> Ponto de partida e retorno
@@ -257,7 +292,14 @@
                         </small>
                     </div>
                     <div class="col-md-6 text-end">
-                        <span class="badge bg-primary">{{ total_orders }}</span> entregas
+                        <small class="text-muted">
+                            <i class="bi bi-truck"></i> 
+                            {% if route.vehicle.max_weight %}
+                                Carga máxima: {{ route.vehicle.max_weight }} kg
+                            {% else %}
+                                Sem restrição de peso
+                            {% endif %}
+                        </small>
                     </div>
                 </div>
             </div>
@@ -276,91 +318,64 @@ var sortable = new Sortable(document.getElementById('waypoints-list'), {
     }
 });
 
-// Atualizar números de sequência visualmente
 function updateSequenceNumbers() {
     var items = document.querySelectorAll('#waypoints-list .waypoint-card');
     items.forEach(function(item, index) {
         var seq = index + 1;
-        // Atualizar o número da sequência
         item.querySelector('.sequence-number').textContent = seq;
         item.setAttribute('data-sequence', seq);
     });
 }
 
-// Salvar nova ordem no servidor
 function saveNewOrder() {
     var order = [];
     document.querySelectorAll('#waypoints-list .waypoint-card').forEach(function(item) {
-        order.push(item.getAttribute('data-id'));
+        var orderId = item.getAttribute('data-id');
+        if (orderId) order.push(orderId);
     });
     
     fetch(window.location.href + '/reorder', {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ order: order })
     }).then(response => {
-        if (!response.ok) {
-            alert('Erro ao salvar nova ordem');
-        } else {
-            showToast('Ordem das entregas atualizada!', 'success');
-        }
+        if (!response.ok) alert('Erro ao salvar nova ordem');
+        else showToast('Ordem das entregas atualizada!');
     });
 }
 
-// Remover entrega da rota
 document.querySelectorAll('.remove-waypoint').forEach(btn => {
     btn.addEventListener('click', function() {
         var orderId = this.getAttribute('data-id');
         if (confirm('Remover esta entrega da rota?')) {
             fetch(window.location.href + '/remove/' + orderId, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                }
+                headers: { 'Content-Type': 'application/json' }
             }).then(response => {
-                if (response.ok) {
-                    location.reload();
-                } else {
-                    alert('Erro ao remover entrega');
-                }
+                if (response.ok) location.reload();
+                else alert('Erro ao remover entrega');
             });
         }
     });
 });
 
-// Otimizar rota com IA
 document.getElementById('optimizeBtn')?.addEventListener('click', function() {
     if (confirm('A IA vai reordenar automaticamente todas as entregas para otimizar a rota. Deseja continuar?')) {
         fetch(window.location.href + '/optimize', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            }
+            headers: { 'Content-Type': 'application/json' }
         }).then(response => {
-            if (response.ok) {
-                location.reload();
-            } else {
-                alert('Erro ao otimizar rota');
-            }
+            if (response.ok) location.reload();
+            else alert('Erro ao otimizar rota');
         });
     }
 });
 
-// Imprimir rota
 document.getElementById('printBtn')?.addEventListener('click', function() {
     window.print();
 });
 
-// Exportar rota
-document.getElementById('exportBtn')?.addEventListener('click', function() {
-    window.location.href = window.location.href + '/export';
-});
-
-// Função auxiliar para mostrar notificações
-function showToast(message, type) {
-    // Implementar toast notification
+function showToast(message) {
     alert(message);
 }
 
@@ -368,7 +383,7 @@ function showToast(message, type) {
 var style = document.createElement('style');
 style.textContent = `
     @media print {
-        .sidebar, .btn, .drag-handle, .remove-waypoint, .card-header .btn {
+        .sidebar, .btn, .drag-handle, .remove-waypoint, .card-header .btn, .btn-group, .dropdown-menu {
             display: none !important;
         }
         .col-md-4, .col-md-8 {

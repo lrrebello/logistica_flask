@@ -1,10 +1,13 @@
 import os
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, make_response
 from flask_login import login_required, current_user
 from app.models import Route, RouteWaypoint, Driver, Vehicle, Order, Address
 from app.extensions import db
 from datetime import datetime, date
 import uuid
+import requests
+import json
+import urllib.parse
 
 routes_bp = Blueprint('routes', __name__)
 
@@ -648,6 +651,7 @@ def view_map(id):
 @login_required
 def export_gpx(id):
     """Exportar rota no formato GPX para GPS Garmin/TomTom"""
+    from flask import make_response
     route = Route.query.get_or_404(id)
     waypoints = route.waypoints
     
@@ -663,13 +667,21 @@ def export_gpx(id):
         <trkseg>
 '''
     
-    # Adicionar pontos da rota (se tiver a geometria salva)
-    # Por enquanto, adicionar waypoints
+    # Adicionar pontos da rota - APENAS com coordenadas
     for wp in waypoints:
-        if wp.address.latitude and wp.address.longitude:
+        if wp.address and wp.address.latitude and wp.address.longitude:
+            if wp.order:
+                # Ponto com pedido
+                name = f"Parada {wp.sequence_order} - Pedido {wp.order.order_number} - {wp.order.client.name}"
+                desc = f"{wp.address.street}, {wp.address.city}"
+            else:
+                # Ponto de início/fim
+                name = f"Parada {wp.sequence_order} - Centralrest (Fábrica)"
+                desc = f"{wp.address.street}, {wp.address.city}"
+            
             gpx += f'''            <trkpt lat="{wp.address.latitude}" lon="{wp.address.longitude}">
-                <name>Parada {wp.sequence_order} - Pedido {wp.order.order_number}</name>
-                <desc>{wp.address.street}, {wp.address.city}</desc>
+                <name>{name}</name>
+                <desc>{desc}</desc>
             </trkpt>
 '''
     
@@ -686,6 +698,7 @@ def export_gpx(id):
 @login_required
 def export_kml(id):
     """Exportar rota no formato KML para Google Earth/My Maps"""
+    from flask import make_response
     route = Route.query.get_or_404(id)
     waypoints = route.waypoints
     
@@ -700,6 +713,15 @@ def export_kml(id):
                 <width>4</width>
             </LineStyle>
         </Style>
+        <Style id="waypointIcon">
+            <IconStyle>
+                <color>ff10b981</color>
+                <scale>0.8</scale>
+                <Icon>
+                    <href>http://maps.google.com/mapfiles/kml/pushpin/red-pushpin.png</href>
+                </Icon>
+            </IconStyle>
+        </Style>
         <Placemark>
             <name>Percurso</name>
             <styleUrl>#routeLine</styleUrl>
@@ -708,7 +730,7 @@ def export_kml(id):
 '''
     
     for wp in waypoints:
-        if wp.address.latitude and wp.address.longitude:
+        if wp.address and wp.address.latitude and wp.address.longitude:
             kml += f'                    {wp.address.longitude},{wp.address.latitude}\n'
     
     kml += '''                </coordinates>
@@ -717,11 +739,19 @@ def export_kml(id):
 '''
     
     for wp in waypoints:
-        if wp.address.latitude and wp.address.longitude:
+        if wp.address and wp.address.latitude and wp.address.longitude:
+            if wp.order:
+                name = f"Parada {wp.sequence_order} - {wp.order.client.name} (Pedido #{wp.order.order_number})"
+                desc = f"{wp.address.street}, {wp.address.city}"
+            else:
+                name = f"Parada {wp.sequence_order} - Centralrest (Fábrica)"
+                desc = f"{wp.address.street}, {wp.address.city}"
+            
             kml += f'''
         <Placemark>
-            <name>Parada {wp.sequence_order} - {wp.order.client.name}</name>
-            <description>{wp.address.street}, {wp.address.city}</description>
+            <name>{name}</name>
+            <description>{desc}</description>
+            <styleUrl>#waypointIcon</styleUrl>
             <Point>
                 <coordinates>{wp.address.longitude},{wp.address.latitude}</coordinates>
             </Point>
@@ -743,28 +773,262 @@ def navigate(id):
     route = Route.query.get_or_404(id)
     waypoints = route.waypoints
     
-    # Construir URLs para navegação
+    # Construir URLs para navegação individual
     google_maps_urls = []
     waze_urls = []
     
+    # Construir URL do Google Maps com TODAS as paradas (rota completa)
+    google_waypoints = []
+    
     for i, wp in enumerate(waypoints, 1):
-        if wp.address.latitude and wp.address.longitude:
-            lat = wp.address.latitude
-            lng = wp.address.longitude
-            google_maps_urls.append({
-                'order': i,
-                'url': f'https://www.google.com/maps/dir/?api=1&destination={lat},{lng}',
-                'client': wp.order.client.name,
-                'address': f'{wp.address.street}, {wp.address.city}'
+        # Verificar se tem coordenadas para a rota completa
+        if wp.address and wp.address.latitude and wp.address.longitude:
+            google_waypoints.append({
+                'lat': wp.address.latitude,
+                'lng': wp.address.longitude,
+                'order': i
             })
-            waze_urls.append({
-                'order': i,
-                'url': f'https://www.waze.com/ul?ll={lat},{lng}&navigate=yes',
-                'client': wp.order.client.name,
-                'address': f'{wp.address.street}, {wp.address.city}'
-            })
+        
+        # Verificar se tem pedido para navegação individual
+        if wp.order and wp.order.client and wp.address:
+            if wp.address.latitude and wp.address.longitude:
+                lat = wp.address.latitude
+                lng = wp.address.longitude
+                google_maps_urls.append({
+                    'order': i,
+                    'url': f'https://www.google.com/maps/dir/?api=1&destination={lat},{lng}',
+                    'client': wp.order.client.name,
+                    'address': f'{wp.address.street}, {wp.address.city}',
+                    'order_number': wp.order.order_number,
+                    'type': 'delivery'
+                })
+                waze_urls.append({
+                    'order': i,
+                    'url': f'https://www.waze.com/ul?ll={lat},{lng}&navigate=yes',
+                    'client': wp.order.client.name,
+                    'address': f'{wp.address.street}, {wp.address.city}',
+                    'order_number': wp.order.order_number,
+                    'type': 'delivery'
+                })
+            else:
+                google_maps_urls.append({
+                    'order': i,
+                    'url': '#',
+                    'client': wp.order.client.name,
+                    'address': f'{wp.address.street}, {wp.address.city} (sem coordenadas)',
+                    'order_number': wp.order.order_number,
+                    'type': 'delivery',
+                    'no_coords': True
+                })
+                waze_urls.append({
+                    'order': i,
+                    'url': '#',
+                    'client': wp.order.client.name,
+                    'address': f'{wp.address.street}, {wp.address.city} (sem coordenadas)',
+                    'order_number': wp.order.order_number,
+                    'type': 'delivery',
+                    'no_coords': True
+                })
+        else:
+            # Ponto de início/fim
+            if wp.address:
+                google_maps_urls.append({
+                    'order': i,
+                    'url': f'https://www.google.com/maps/dir/?api=1&destination={wp.address.latitude},{wp.address.longitude}' if wp.address.latitude else '#',
+                    'client': 'Centralrest - Fábrica',
+                    'address': f'{wp.address.street}, {wp.address.city}',
+                    'order_number': 'PONTO DE PARTIDA',
+                    'type': 'start_end'
+                })
+                waze_urls.append({
+                    'order': i,
+                    'url': f'https://www.waze.com/ul?ll={wp.address.latitude},{wp.address.longitude}&navigate=yes' if wp.address.latitude else '#',
+                    'client': 'Centralrest - Fábrica',
+                    'address': f'{wp.address.street}, {wp.address.city}',
+                    'order_number': 'PONTO DE PARTIDA',
+                    'type': 'start_end'
+                })
+    
+    # Construir URL da rota completa do Google Maps (formato correto)
+    full_route_google = ""
+    if len(google_waypoints) >= 2:
+        # Formato: https://www.google.com/maps/dir/Origem/Destino/parada1/parada2/parada3
+        # ou com waypoints: https://www.google.com/maps/dir/Origem/Destino/?waypoints=lat1,lng1|lat2,lng2
+        
+        origin = f"{google_waypoints[0]['lat']},{google_waypoints[0]['lng']}"
+        destination = f"{google_waypoints[-1]['lat']},{google_waypoints[-1]['lng']}"
+        
+        # Waypoints intermediários (excluindo origem e destino)
+        intermediate = google_waypoints[1:-1]
+        
+        # Versão alternativa do URL (formato antigo do Google Maps)
+        if intermediate:
+            # Formato antigo: /Origem/parada1/parada2/Destino
+            all_points = [origin] + [f"{wp['lat']},{wp['lng']}" for wp in intermediate] + [destination]
+            full_route_google = f"https://www.google.com/maps/dir/{'/'.join(all_points)}?travelmode=driving"
+        else:
+            full_route_google = f"https://www.google.com/maps/dir/{origin}/{destination}/?travelmode=driving"
+        
+        # Teste com URL curta para menos de 10 pontos
+        print(f"URL da rota completa: {full_route_google}")
     
     return render_template('routes/navigate.html', 
                          route=route, 
+                         waypoints=waypoints,
                          google_urls=google_maps_urls,
-                         waze_urls=waze_urls)
+                         waze_urls=waze_urls,
+                         full_route_google=full_route_google)
+
+
+def get_eurowag_vehicle_profile(vehicle):
+    """Prepara perfil do veículo para a Eurowag"""
+    profile = {
+        "height": float(vehicle.max_height) if vehicle.max_height else 4.0,
+        "weight": float(vehicle.max_weight) if vehicle.max_weight else 3500,
+        "length": float(vehicle.length) if vehicle.length else 12.0,
+        "width": float(vehicle.width) if vehicle.width else 2.55,
+        "vehicle_type": vehicle.type,  # van, truck, trailer
+        "hazmat": vehicle.hazmat,
+        "cargo": vehicle.cargo_type or "general"
+    }
+    
+    # Adicionar informações específicas da Eurowag
+    if vehicle.ew_vehicle_category:
+        profile["category"] = vehicle.ew_vehicle_category
+    if vehicle.ew_has_trailer:
+        profile["has_trailer"] = True
+        profile["trailer_length"] = float(vehicle.ew_trailer_length) if vehicle.ew_trailer_length else None
+    if vehicle.ew_emission_standard:
+        profile["emission"] = vehicle.ew_emission_standard
+    
+    return profile
+
+def build_eurowag_deep_link(route):
+    """Constrói o deep link para a Eurowag Navigation"""
+    
+    # Pegar waypoints com coordenadas
+    waypoints = []
+    for wp in route.waypoints:
+        if wp.address and wp.address.latitude and wp.address.longitude:
+            waypoints.append({
+                "lat": wp.address.latitude,
+                "lng": wp.address.longitude,
+                "name": wp.order.order_number if wp.order else f"Parada {wp.sequence_order}",
+                "address": f"{wp.address.street}, {wp.address.city}"
+            })
+    
+    if len(waypoints) < 2:
+        return None
+    
+    # Construir o deep link no formato Eurowag
+    # Eurowag suporta deep links para planear rotas com múltiplos waypoints
+    
+    # Base URL da aplicação Eurowag Navigation
+    base_url = "eurowagnav://"
+    
+    # Parâmetros principais
+    params = []
+    
+    # Waypoints (até 25)
+    for i, wp in enumerate(waypoints):
+        params.append(f"wp{i+1}={wp['lat']},{wp['lng']}")
+        if wp.get('name'):
+            params.append(f"name{i+1}={urllib.parse.quote(wp['name'])}")
+    
+    # Perfil do veículo
+    vehicle_profile = get_eurowag_vehicle_profile(route.vehicle)
+    params.append(f"vehicle_height={vehicle_profile['height']}")
+    params.append(f"vehicle_weight={vehicle_profile['weight']}")
+    params.append(f"vehicle_length={vehicle_profile['length']}")
+    params.append(f"vehicle_type={vehicle_profile['vehicle_type']}")
+    
+    if vehicle_profile['hazmat']:
+        params.append("hazmat=1")
+    
+    # Preferências do condutor
+    if route.driver.avoid_tolls:
+        params.append("avoid_tolls=1")
+    if route.driver.avoid_highways:
+        params.append("avoid_motorways=1")
+    if route.driver.ew_prefer_ferry:
+        params.append("prefer_ferry=1")
+    
+    # Restrições de tempo
+    if route.driver.max_driving_hours_per_day:
+        params.append(f"max_driving_hours={route.driver.max_driving_hours_per_day}")
+    
+    # Combinar tudo
+    url = f"{base_url}?" + "&".join(params)
+    
+    return url
+
+def create_eurowag_route_via_api(route):
+    """Cria rota via API da Eurowag (opcional)"""
+    api_key = current_app.config.get('EUROWAG_API_KEY')
+    if not api_key:
+        return None
+    
+    # Construir payload
+    waypoints = []
+    for wp in route.waypoints:
+        if wp.address and wp.address.latitude and wp.address.longitude:
+            waypoints.append({
+                "location": [wp.address.longitude, wp.address.latitude],
+                "type": "delivery" if wp.order else "depot",
+                "reference": wp.order.order_number if wp.order else "depot",
+                "duration": 20,  # Tempo de parada em minutos
+                "time_window": None
+            })
+    
+    payload = {
+        "waypoints": waypoints,
+        "vehicle": get_eurowag_vehicle_profile(route.vehicle),
+        "preferences": {
+            "avoid_tolls": route.driver.avoid_tolls,
+            "avoid_motorways": route.driver.avoid_highways,
+            "prefer_ferry": route.driver.ew_prefer_ferry
+        }
+    }
+    
+    try:
+        response = requests.post(
+            f"{current_app.config['EUROWAG_API_URL']}/route",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=10
+        )
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        print(f"Erro Eurowag API: {e}")
+    
+    return None
+
+
+@routes_bp.route('/<int:id>/eurowag')
+@login_required
+def eurowag_navigation(id):
+    """Abrir rota no Eurowag Navigation"""
+    route = Route.query.get_or_404(id)
+    
+    # Verificar se o condutor tem perfil Eurowag
+    if not route.driver.ew_driver_id:
+        flash('Condutor não está configurado para navegação Eurowag', 'warning')
+        return redirect(url_for('routes.view', id=id))
+    
+    # Construir deep link
+    deep_link = build_eurowag_deep_link(route)
+    
+    if deep_link:
+        # Tentar criar rota via API para obter rota otimizada
+        api_route = create_eurowag_route_via_api(route)
+        if api_route:
+            # Se tiver resposta da API, pode obter distância real, tempo, etc.
+            route.total_distance = api_route.get('total_distance')
+            route.total_estimated_duration = api_route.get('total_duration')
+            db.session.commit()
+        
+        return redirect(deep_link)
+    else:
+        flash('Não foi possível gerar rota para Eurowag (faltam coordenadas?)', 'danger')
+        return redirect(url_for('routes.view', id=id))

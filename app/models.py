@@ -13,7 +13,7 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(320), unique=True)
     login_method = db.Column(db.String(64))
     password_hash = db.Column(db.String(255))
-    role = db.Column(db.String(20), default='user', nullable=False)  # admin, user, driver, commercial
+    role = db.Column(db.String(20), default='user', nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -50,7 +50,7 @@ class Product(db.Model):
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
     price = db.Column(db.Numeric(10, 2), nullable=False)
-    unit = db.Column(db.String(20), default='kg', nullable=False)  # kg, un, lt, cx
+    unit = db.Column(db.String(20), default='kg', nullable=False)
     supplier_id = db.Column(db.Integer, db.ForeignKey('suppliers.id'))
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
@@ -80,13 +80,13 @@ class Stock(db.Model):
 class StopTimeConfig(db.Model):
     __tablename__ = 'stop_time_configs'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False)  # Supermercado, Padaria, Hotel, etc
+    name = db.Column(db.String(50), nullable=False)
     description = db.Column(db.String(200))
-    base_time = db.Column(db.Integer, default=15)  # minutos
-    unloading_time_per_unit = db.Column(db.Integer, default=2)  # minutos por unidade
+    base_time = db.Column(db.Integer, default=15)
+    unloading_time_per_unit = db.Column(db.Integer, default=2)
     payment_time = db.Column(db.Integer, default=5)
     documentation_time = db.Column(db.Integer, default=3)
-    setup_time = db.Column(db.Integer, default=5)  # manobra/estacionamento
+    setup_time = db.Column(db.Integer, default=5)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     
@@ -141,19 +141,34 @@ class Vehicle(db.Model):
     model = db.Column(db.String(50))
     brand = db.Column(db.String(50))
     type = db.Column(db.String(20), nullable=False)  # van, truck, trailer
-    max_weight = db.Column(db.Numeric(10, 2))  # kg
-    max_volume = db.Column(db.Numeric(10, 2))  # m³
-    max_height = db.Column(db.Numeric(10, 2), nullable=True)  # m
-    max_axle_load = db.Column(db.Numeric(5, 2), nullable=True)  # toneladas por eixo
-    length = db.Column(db.Numeric(5, 2), nullable=True)  # metros
-    width = db.Column(db.Numeric(5, 2), nullable=True)  # metros
-    hazmat = db.Column(db.Boolean, default=False)
-    cargo_type = db.Column(db.String(50))  # general, refrigerated, hazardous
+    status = db.Column(db.String(20), default='available')
     fuel_type = db.Column(db.String(20))
-    status = db.Column(db.String(20), default='available')  # available, in_use, maintenance
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    
+    # Dimensões e capacidade
+    max_weight = db.Column(db.Numeric(10, 2))  # kg
+    max_volume = db.Column(db.Numeric(10, 2))  # m³
+    max_height = db.Column(db.Numeric(10, 2), nullable=True)  # m
+    length = db.Column(db.Numeric(5, 2), nullable=True)  # metros
+    width = db.Column(db.Numeric(5, 2), nullable=True)  # metros
+    max_axle_load = db.Column(db.Numeric(5, 2), nullable=True)  # toneladas por eixo
+    
+    # Carga
+    hazmat = db.Column(db.Boolean, default=False)
+    cargo_type = db.Column(db.String(50))  # general, refrigerated, hazardous
+    
+    # Eurowag específicos
+    ew_vehicle_category = db.Column(db.String(30))  # L1, L2, L3 (comprimento)
+    ew_emission_standard = db.Column(db.String(10))  # Euro3, Euro4, etc
+    ew_has_trailer = db.Column(db.Boolean, default=False)
+    ew_trailer_length = db.Column(db.Numeric(5, 2), nullable=True)
+    ew_cargo_type_adr = db.Column(db.String(50))
+    ew_requires_vignette = db.Column(db.Boolean, default=True)
+    ew_requires_toll = db.Column(db.Boolean, default=True)
+    ew_toll_countries = db.Column(db.String(200))
+    ew_avoid_environmental_zones = db.Column(db.Boolean, default=False)
 
 
 # ==================== MOTORISTAS ====================
@@ -170,20 +185,29 @@ class Driver(db.Model):
     emergency_contact = db.Column(db.String(100))
     emergency_phone = db.Column(db.String(20))
     status = db.Column(db.String(20), default='active')
-    max_driving_hours_per_day = db.Column(db.Integer, default=9)
-    max_driving_hours_per_week = db.Column(db.Integer, default=56)
-    max_work_hours_per_day = db.Column(db.Integer, default=10)
-    required_rest_after_4h30 = db.Column(db.Integer, default=45)
-    required_daily_rest = db.Column(db.Integer, default=11)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    user = db.relationship('User', backref='driver_profile')
+    
+    # Preferências de condução
     avoid_tolls = db.Column(db.Boolean, default=False)
     avoid_highways = db.Column(db.Boolean, default=False)
     prefer_scenic = db.Column(db.Boolean, default=False)
     max_speed = db.Column(db.Integer, default=120)
     preferred_start_time = db.Column(db.Time)
     preferred_end_time = db.Column(db.Time)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
-    user = db.relationship('User', backref='driver_profile')
+    
+    # Legislação
+    max_driving_hours_per_day = db.Column(db.Integer, default=9)
+    max_driving_hours_per_week = db.Column(db.Integer, default=56)
+    max_work_hours_per_day = db.Column(db.Integer, default=10)
+    required_rest_after_4h30 = db.Column(db.Integer, default=45)
+    required_daily_rest = db.Column(db.Integer, default=11)
+    
+    # Eurowag específicos
+    ew_driver_id = db.Column(db.String(50))
+    ew_api_key = db.Column(db.String(255))
+    ew_prefer_ferry = db.Column(db.Boolean, default=False)
 
 
 # ==================== PEDIDOS ====================
@@ -194,8 +218,8 @@ class Order(db.Model):
     order_number = db.Column(db.String(20), unique=True, nullable=False)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
     address_id = db.Column(db.Integer, db.ForeignKey('addresses.id'), nullable=False)
-    status = db.Column(db.String(20), default='pending', nullable=False)  # pending, confirmed, in_transit, delivered, cancelled
-    priority = db.Column(db.String(10), default='normal')  # normal, high, urgent
+    status = db.Column(db.String(20), default='pending', nullable=False)
+    priority = db.Column(db.String(10), default='normal')
     total_amount = db.Column(db.Numeric(12, 2), default=0.0, nullable=False)
     notes = db.Column(db.Text)
     internal_notes = db.Column(db.Text)
@@ -232,7 +256,7 @@ class Route(db.Model):
     driver_id = db.Column(db.Integer, db.ForeignKey('drivers.id'), nullable=False)
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicles.id'), nullable=False)
     route_date = db.Column(db.Date, nullable=False)
-    status = db.Column(db.String(20), default='planned')  # planned, in_progress, completed, cancelled
+    status = db.Column(db.String(20), default='planned')
     estimated_clients_count = db.Column(db.Integer)
     actual_clients_count = db.Column(db.Integer)
     region = db.Column(db.String(50))
@@ -250,7 +274,6 @@ class Route(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
     
-    # Relacionamentos
     driver = db.relationship('Driver', backref='routes')
     vehicle = db.relationship('Vehicle', backref='routes')
     waypoints = db.relationship('RouteWaypoint', backref='route', lazy=True, 
@@ -263,7 +286,7 @@ class RouteWaypoint(db.Model):
     __tablename__ = 'route_waypoints'
     id = db.Column(db.Integer, primary_key=True)
     route_id = db.Column(db.Integer, db.ForeignKey('routes.id'), nullable=False)
-    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=True)  # Pode ser nulo para pontos de início/fim
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.id'), nullable=True)
     address_id = db.Column(db.Integer, db.ForeignKey('addresses.id'), nullable=False)
     sequence_order = db.Column(db.Integer, nullable=False)
     original_sequence_order = db.Column(db.Integer)

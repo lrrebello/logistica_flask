@@ -7,10 +7,11 @@ from app import create_app
 from app.extensions import db
 from app.models import (
     Client, Address, Product, Order, OrderItem, 
-    Vehicle, Driver, Route, RouteWaypoint
+    Vehicle, Driver, Route, RouteWaypoint, StopTimeConfig
 )
 from datetime import datetime, date, time
 import random
+import time as time_module
 
 def limpar_dados_antigos():
     """Remove rotas de teste e pedidos associados"""
@@ -24,8 +25,13 @@ def limpar_dados_antigos():
     # Apagar rotas de teste
     Route.query.filter(Route.route_number.like('TEST-%')).delete(synchronize_session=False)
     
-    # Apagar pedidos sem rota (opcional - comentado para não perder dados)
-    # Order.query.filter(~Order.route_waypoints.any()).delete(synchronize_session=False)
+    # Apagar itens de pedidos de teste
+    OrderItem.query.filter(
+        OrderItem.order.has(Order.order_number.like('TEST-%'))
+    ).delete(synchronize_session=False)
+    
+    # Apagar pedidos de teste
+    Order.query.filter(Order.order_number.like('TEST-%')).delete(synchronize_session=False)
     
     db.session.commit()
     print("✅ Dados antigos removidos")
@@ -46,6 +52,14 @@ def get_or_create_address(client_id, defaults):
         db.session.flush()
     return address
 
+def get_or_create_stop_config(name, defaults):
+    config = StopTimeConfig.query.filter_by(name=name).first()
+    if not config:
+        config = StopTimeConfig(**defaults)
+        db.session.add(config)
+        db.session.flush()
+    return config
+
 def seed_rota_teste():
     app = create_app()
     with app.app_context():
@@ -53,6 +67,17 @@ def seed_rota_teste():
         
         # Limpar dados antigos primeiro
         limpar_dados_antigos()
+        
+        # ==================== CONFIGURAÇÕES DE TEMPO ====================
+        configs = [
+            {'name': 'Supermercado', 'base_time': 20, 'unloading_time_per_unit': 3, 'payment_time': 8, 'documentation_time': 5, 'setup_time': 10},
+            {'name': 'Padaria/Pequeno Comércio', 'base_time': 10, 'unloading_time_per_unit': 1, 'payment_time': 3, 'documentation_time': 2, 'setup_time': 5},
+            {'name': 'Hotel/Restaurante', 'base_time': 15, 'unloading_time_per_unit': 2, 'payment_time': 5, 'documentation_time': 3, 'setup_time': 8},
+            {'name': 'Indústria', 'base_time': 30, 'unloading_time_per_unit': 5, 'payment_time': 10, 'documentation_time': 10, 'setup_time': 15},
+        ]
+        
+        for data in configs:
+            get_or_create_stop_config(data['name'], data)
         
         # ==================== CLIENTES ====================
         centralrest = get_or_create_client('500000001', {
@@ -78,6 +103,23 @@ def seed_rota_teste():
         client_aveiro4 = get_or_create_client('509012345', {'name': 'Restaurante O Telheiro', 'nif': '509012345', 'email': 'telheiro@rest.pt', 'phone': '234567898', 'is_active': True})
         client_aveiro5 = get_or_create_client('510123456', {'name': 'Hotel Moliceiro', 'nif': '510123456', 'email': 'compras@hotelmoliceiro.pt', 'phone': '234567899', 'is_active': True})
         
+        # Associar configurações de tempo
+        supermercado = StopTimeConfig.query.filter_by(name='Supermercado').first()
+        padaria = StopTimeConfig.query.filter_by(name='Padaria/Pequeno Comércio').first()
+        hotel = StopTimeConfig.query.filter_by(name='Hotel/Restaurante').first()
+        industria = StopTimeConfig.query.filter_by(name='Indústria').first()
+        
+        client_ilhavo1.stop_time_config_id = supermercado.id if supermercado else None
+        client_aveiro1.stop_time_config_id = supermercado.id if supermercado else None
+        client_aveiro2.stop_time_config_id = supermercado.id if supermercado else None
+        client_aveiro3.stop_time_config_id = supermercado.id if supermercado else None
+        client_ilhavo2.stop_time_config_id = padaria.id if padaria else None
+        client_vagos1.stop_time_config_id = padaria.id if padaria else None
+        client_vagos2.stop_time_config_id = padaria.id if padaria else None
+        client_vagos3.stop_time_config_id = padaria.id if padaria else None
+        client_aveiro5.stop_time_config_id = hotel.id if hotel else None
+        client_aveiro4.stop_time_config_id = industria.id if industria else None
+        
         # ==================== ENDEREÇOS ====================
         addr_ilhavo1 = get_or_create_address(client_ilhavo1.id, {'street': 'Rua dos Bombeiros, 10', 'city': 'Ílhavo', 'postal_code': '3830-123', 'latitude': 40.6160, 'longitude': -8.6700, 'is_delivery_point': True, 'time_window_start': time(9,0), 'time_window_end': time(12,0)})
         addr_ilhavo2 = get_or_create_address(client_ilhavo2.id, {'street': 'Largo da República, 5', 'city': 'Ílhavo', 'postal_code': '3830-124', 'latitude': 40.6180, 'longitude': -8.6650, 'is_delivery_point': True})
@@ -100,10 +142,10 @@ def seed_rota_teste():
                 db.session.flush()
             produtos.append(prod)
         
-        # ==================== PEDIDOS ====================
+        # ==================== PEDIDOS (com timestamp único) ====================
         pedidos = []
+        timestamp = int(time_module.time())
         
-        # Lista de pedidos: (client, address, priority)
         pedidos_data = [
             (client_ilhavo1, addr_ilhavo1, 'normal'),
             (client_ilhavo2, addr_ilhavo2, 'high'),
@@ -122,7 +164,7 @@ def seed_rota_teste():
         
         for i, (client, addr, priority) in enumerate(pedidos_data, start=1):
             pedido = Order(
-                order_number=f"TEST-ORD-{datetime.now().strftime('%Y%m%d')}-{i:03d}",
+                order_number=f"TST{timestamp}{i:03d}",  # Ex: TST1734567890001
                 client_id=client.id,
                 address_id=addr.id,
                 status='pending',
@@ -166,7 +208,7 @@ def seed_rota_teste():
         waypoints_raw.append((centralrest_addr.id, None, 'Centralrest (Fim)'))
         
         route = Route(
-            route_number=f"TEST-{datetime.now().strftime('%Y%m%d')}-{random.randint(100,999)}",
+            route_number=f"TST{timestamp}",
             route_name='Rota de Teste - Centro/Norte',
             description='Rota com clientes em Ílhavo, Vagos e Aveiro (ordem aleatória)',
             region='Centro',

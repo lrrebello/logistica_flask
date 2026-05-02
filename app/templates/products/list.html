@@ -30,7 +30,7 @@
                     <tr>
                         <td class="ps-4">
                             <div class="fw-bold">{{ product.name }}</div>
-                            <small class="text-muted">{{ product.description|truncate(50) }}</small>
+                                <small class="text-muted">{{ product.description|default('')|truncate(50) if product.description else '' }}</small>
                         </td>
                         <td>{{ product.supplier.name if product.supplier else 'N/A' }}</td>
                         <td>R$ {{ "%.2f"|format(product.price) }}</td>

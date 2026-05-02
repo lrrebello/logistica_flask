@@ -4,58 +4,102 @@
 
 {% block page_title %}
     <i class="bi bi-compass"></i> Navegação - Rota {{ route.route_number }}
-    {% if route.route_name %} - {{ route.route_name }}{% endif %}
 {% endblock %}
 
 {% block extra_css %}
 <style>
-    .nav-card {
-        border-left: 3px solid #667eea;
-        margin-bottom: 15px;
-        transition: all 0.2s;
+    .btn-google { background-color: #4285f4; color: white; }
+    .btn-google:hover { background-color: #3367d6; color: white; }
+    .btn-waze { background-color: #33ccff; color: #1f1f1f; }
+    .btn-waze:hover { background-color: #00bfff; color: #1f1f1f; }
+    .btn-eurowag { background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%); color: white; border: none; }
+    .btn-eurowag:hover { background: linear-gradient(135deg, #2a5298 0%, #1e3c72 100%); color: white; }
+    .btn-full-route { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; border: none; }
+    .btn-full-route:hover { background: linear-gradient(135deg, #059669 0%, #047857 100%); color: white; }
+    
+    /* Corrigir visualização no mobile */
+    @media (max-width: 768px) {
+        .table-responsive {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        .table {
+            min-width: 600px;
+        }
+        .btn-group-mobile {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        .card-body {
+            padding: 12px;
+        }
+        h1.h2 {
+            font-size: 1.5rem;
+        }
     }
-    .nav-card:hover {
-        transform: translateX(5px);
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    
+    /* Estilo para cards no mobile - alternativa à tabela */
+    .mobile-card-list {
+        display: none;
     }
-    .btn-google {
-        background-color: #4285f4;
-        color: white;
-    }
-    .btn-google:hover {
-        background-color: #3367d6;
-        color: white;
-    }
-    .btn-waze {
-        background-color: #33ccff;
-        color: #1f1f1f;
-    }
-    .btn-waze:hover {
-        background-color: #00bfff;
-        color: #1f1f1f;
-    }
-    .qr-code {
-        text-align: center;
-        padding: 20px;
-        background: white;
-        border-radius: 12px;
-    }
-    .instruction-step {
-        background: #f8f9fa;
-        border-radius: 8px;
-        padding: 15px;
-        margin-bottom: 15px;
-    }
-    .step-number {
-        background: #667eea;
-        color: white;
-        width: 30px;
-        height: 30px;
-        border-radius: 50%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 10px;
+    
+    @media (max-width: 768px) {
+        .desktop-table {
+            display: none;
+        }
+        .mobile-card-list {
+            display: block;
+        }
+        .stop-card {
+            background: white;
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border-left: 4px solid #667eea;
+        }
+        .stop-number {
+            background: #667eea;
+            color: white;
+            border-radius: 20px;
+            padding: 2px 10px;
+            font-size: 12px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+        .stop-client {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 5px;
+        }
+        .stop-order {
+            font-size: 12px;
+            color: #6c757d;
+            margin-bottom: 8px;
+        }
+        .stop-address {
+            font-size: 12px;
+            color: #495057;
+            margin-bottom: 10px;
+            word-break: break-word;
+        }
+        .stop-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .stop-buttons .btn {
+            flex: 1;
+            padding: 8px;
+            font-size: 12px;
+        }
+        .urgency-badge {
+            display: inline-block;
+            margin-left: 8px;
+            font-size: 10px;
+            padding: 2px 6px;
+        }
     }
 </style>
 {% endblock %}
@@ -63,59 +107,34 @@
 {% block content %}
 <div class="row">
     <div class="col-md-8">
+        <!-- Botão principal de rota completa -->
         <div class="card mb-4">
             <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="bi bi-navigation"></i> Como usar</h5>
+                <h5 class="mb-0"><i class="bi bi-navigation"></i> Abrir rota completa</h5>
             </div>
             <div class="card-body">
-                <div class="instruction-step">
-                    <div class="d-flex align-items-center mb-2">
-                        <span class="step-number">1</span>
-                        <strong>No computador:</strong>
-                    </div>
-                    <p>Clique no botão "Exportar GPX" ou "Exportar KML" para baixar o arquivo da rota e transferir para seu GPS Garmin/TomTom.</p>
-                </div>
-                
-                <div class="instruction-step">
-                    <div class="d-flex align-items-center mb-2">
-                        <span class="step-number">2</span>
-                        <strong>No telemóvel (Android/iOS):</strong>
-                    </div>
-                    <p>Use os links abaixo para abrir cada parada diretamente no Google Maps ou Waze.</p>
-                </div>
-                
-                <div class="instruction-step">
-                    <div class="d-flex align-items-center mb-2">
-                        <span class="step-number">3</span>
-                        <strong>Aplicações suportadas:</strong>
-                    </div>
-                    <p>
-                        <i class="bi bi-google"></i> <strong>Google Maps</strong> - Gratuito, disponível em todas as plataformas<br>
-                        <i class="bi bi-map"></i> <strong>Waze</strong> - Melhor para trânsito em tempo real (muito usado em Portugal)<br>
-                        <i class="bi bi-sd-card"></i> <strong>GPX/KML</strong> - Para GPS dedicados (Garmin, TomTom)
-                    </p>
-                </div>
+                <a href="{{ full_route_google }}" target="_blank" class="btn btn-full-route w-100 py-3">
+                    <i class="bi bi-google fs-3 d-block"></i>
+                    <strong>Abrir rota completa no Google Maps</strong>
+                    <small class="d-block">Com todas as {{ waypoints|length }} paradas</small>
+                </a>
             </div>
         </div>
         
         <div class="card">
             <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="bi bi-pin-map"></i> Exportar rota completa</h5>
+                <h5 class="mb-0"><i class="bi bi-pin-map"></i> Exportar rota</h5>
             </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <a href="{{ url_for('routes.export_gpx', id=route.id) }}" class="btn btn-success w-100 py-3">
-                            <i class="bi bi-download fs-4 d-block"></i>
-                            Exportar GPX
-                            <small class="d-block">Para Garmin, TomTom, OsmAnd</small>
+                    <div class="col-6">
+                        <a href="{{ url_for('routes.export_gpx', id=route.id) }}" class="btn btn-success w-100">
+                            <i class="bi bi-download"></i> GPX
                         </a>
                     </div>
-                    <div class="col-md-6 mb-3">
-                        <a href="{{ url_for('routes.export_kml', id=route.id) }}" class="btn btn-info w-100 py-3">
-                            <i class="bi bi-download fs-4 d-block"></i>
-                            Exportar KML
-                            <small class="d-block">Para Google Earth, My Maps</small>
+                    <div class="col-6">
+                        <a href="{{ url_for('routes.export_kml', id=route.id) }}" class="btn btn-info w-100">
+                            <i class="bi bi-download"></i> KML
                         </a>
                     </div>
                 </div>
@@ -124,44 +143,25 @@
     </div>
     
     <div class="col-md-4">
-        <div class="card mb-4">
-            <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="bi bi-qr-code"></i> QR Code</h5>
-            </div>
-            <div class="card-body text-center">
-                <div id="qrcode" class="mb-3"></div>
-                <p class="small text-muted">Escanear no telemóvel para abrir esta página</p>
-            </div>
-        </div>
-        
         <div class="card">
             <div class="card-header bg-white">
-                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Resumo da Rota</h5>
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Resumo</h5>
             </div>
             <div class="card-body">
-                <div class="mb-2">
-                    <strong>Número:</strong> {{ route.route_number }}
-                </div>
-                <div class="mb-2">
-                    <strong>Data:</strong> {{ route.route_date.strftime('%d/%m/%Y') }}
-                </div>
-                <div class="mb-2">
-                    <strong>Motorista:</strong> {{ route.driver.name }}
-                </div>
-                <div class="mb-2">
-                    <strong>Veículo:</strong> {{ route.vehicle.model }} ({{ route.vehicle.plate }})
-                </div>
-                <div>
-                    <strong>Total entregas:</strong> {{ route.waypoints|length }}
-                </div>
+                <div><strong>Rota:</strong> {{ route.route_number }}</div>
+                <div><strong>Data:</strong> {{ route.route_date.strftime('%d/%m/%Y') }}</div>
+                <div><strong>Motorista:</strong> {{ route.driver.name }}</div>
+                <div><strong>Veículo:</strong> {{ route.vehicle.plate }}</div>
+                <div><strong>Entregas:</strong> {{ waypoints|length }}</div>
             </div>
         </div>
     </div>
 </div>
 
-<div class="card mt-4">
+<!-- Versão Desktop (Tabela) -->
+<div class="card mt-4 desktop-table">
     <div class="card-header bg-white">
-        <h5 class="mb-0"><i class="bi bi-list-stars"></i> Paradas para navegação</h5>
+        <h5 class="mb-0">Paradas ({{ waypoints|length }})</h5>
     </div>
     <div class="card-body p-0">
         <div class="table-responsive">
@@ -169,26 +169,49 @@
                 <thead class="table-light">
                     <tr>
                         <th>#</th>
-                        <th>Cliente</th>
+                        <th>Cliente / Pedido</th>
                         <th>Endereço</th>
-                        <th colspan="2">Navegar</th>
+                        <th>Navegar</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {% for i in range(google_urls|length) %}
+                    {% for wp in waypoints %}
                     <tr>
-                        <td class="fw-bold">{{ google_urls[i].order }}</td>
-                        <td>{{ google_urls[i].client }}</td>
-                        <td class="small">{{ google_urls[i].address }}</td>
-                        <td style="width: 50px">
-                            <a href="{{ google_urls[i].url }}" target="_blank" class="btn btn-google btn-sm" title="Google Maps">
-                                <i class="bi bi-google"></i>
-                            </a>
+                        <td class="fw-bold">{{ loop.index }}</td>
+                        <td>
+                            {% if wp.order %}
+                                <strong>{{ wp.order.client.name }}</strong>
+                                <br><small>Pedido: {{ wp.order.order_number }}</small>
+                                {% if wp.order.priority == 'urgent' %}
+                                    <span class="badge bg-danger">Urgente</span>
+                                {% endif %}
+                            {% else %}
+                                <span class="text-primary">🏭 Centralrest</span>
+                            {% endif %}
                         </td>
-                        <td style="width: 50px">
-                            <a href="{{ waze_urls[i].url }}" target="_blank" class="btn btn-waze btn-sm" title="Waze">
-                                <i class="bi bi-map"></i>
-                            </a>
+                        <td class="small">
+                            {% if wp.address %}
+                                {{ wp.address.street }}, {{ wp.address.city }}
+                            {% else %}
+                                N/A
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group btn-group-sm">
+                                {% if wp.address and wp.address.latitude and wp.address.longitude %}
+                                <a href="https://www.google.com/maps/dir/?api=1&destination={{ wp.address.latitude }},{{ wp.address.longitude }}" target="_blank" class="btn btn-google" title="Google Maps">
+                                    <i class="bi bi-google"></i>
+                                </a>
+                                <a href="https://www.waze.com/ul?ll={{ wp.address.latitude }},{{ wp.address.longitude }}&navigate=yes" target="_blank" class="btn btn-waze" title="Waze">
+                                    <i class="bi bi-map"></i>
+                                </a>
+                                <button class="btn btn-eurowag eurowag-link" data-lat="{{ wp.address.latitude }}" data-lng="{{ wp.address.longitude }}" data-name="{% if wp.order %}{{ wp.order.order_number }}{% else %}Centralrest{% endif %}" title="Eurowag">
+                                    <i class="bi bi-truck"></i>
+                                </button>
+                                {% else %}
+                                <button class="btn btn-secondary" disabled>🚫</button>
+                                {% endif %}
+                            </div>
                         </td>
                     </tr>
                     {% endfor %}
@@ -198,16 +221,79 @@
     </div>
 </div>
 
+<!-- Versão Mobile (Cards) -->
+<div class="mobile-card-list mt-4">
+    <div class="card-header bg-white">
+        <h5 class="mb-0">Paradas ({{ waypoints|length }})</h5>
+    </div>
+    <div class="mt-3">
+        {% for wp in waypoints %}
+        <div class="stop-card">
+            <div class="stop-number">Parada {{ loop.index }}</div>
+            <div class="stop-client">
+                {% if wp.order %}
+                    {{ wp.order.client.name }}
+                    {% if wp.order.priority == 'urgent' %}
+                        <span class="badge bg-danger urgency-badge">Urgente</span>
+                    {% endif %}
+                {% else %}
+                    🏭 Centralrest - Fábrica
+                {% endif %}
+            </div>
+            {% if wp.order %}
+            <div class="stop-order">Pedido: {{ wp.order.order_number }}</div>
+            {% endif %}
+            <div class="stop-address">
+                {% if wp.address %}
+                    {{ wp.address.street }}, {{ wp.address.city }}
+                    <br>{{ wp.address.postal_code }}
+                {% else %}
+                    Endereço não disponível
+                {% endif %}
+            </div>
+            <div class="stop-buttons">
+                {% if wp.address and wp.address.latitude and wp.address.longitude %}
+                <a href="https://www.google.com/maps/dir/?api=1&destination={{ wp.address.latitude }},{{ wp.address.longitude }}" target="_blank" class="btn btn-google">
+                                    <i class="bi bi-google"></i> Google
+                                </a>
+                                <a href="https://www.waze.com/ul?ll={{ wp.address.latitude }},{{ wp.address.longitude }}&navigate=yes" target="_blank" class="btn btn-waze">
+                                    <i class="bi bi-map"></i> Waze
+                                </a>
+                                <button class="btn btn-eurowag eurowag-link" data-lat="{{ wp.address.latitude }}" data-lng="{{ wp.address.longitude }}" data-name="{% if wp.order %}{{ wp.order.order_number }}{% else %}Centralrest{% endif %}">
+                                    <i class="bi bi-truck"></i> Eurowag
+                                </button>
+                                {% else %}
+                                <button class="btn btn-secondary" disabled>❌ Sem GPS</button>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+
 <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
 <script>
-    // Gerar QR Code da página
-    new QRCode(document.getElementById("qrcode"), {
-        text: window.location.href,
-        width: 150,
-        height: 150,
-        colorDark: "#667eea",
-        colorLight: "#ffffff",
-        correctLevel: QRCode.CorrectLevel.H
+// QR Code
+new QRCode(document.getElementById("qrcode"), {
+    text: window.location.href,
+    width: 150,
+    height: 150,
+    colorDark: "#667eea",
+    colorLight: "#ffffff"
+});
+
+// Eurowag para uma parada
+document.querySelectorAll('.eurowag-link').forEach(btn => {
+    btn.addEventListener('click', function() {
+        var lat = this.getAttribute('data-lat');
+        var lng = this.getAttribute('data-lng');
+        var name = this.getAttribute('data-name');
+        var url = `eurowagnav://navigate?lat=${lat}&lng=${lng}&name=${encodeURIComponent(name)}`;
+        window.open(url, '_blank');
+        setTimeout(() => {
+            alert('Se a app não abrir, instale a Eurowag Navigation');
+        }, 1000);
     });
+});
 </script>
-{% endblock %}
+            {% endblock %}
