@@ -229,7 +229,7 @@
                                 <div class="d-inline-block">
                                     <div>
                                         <strong>#{{ waypoint.order.order_number }}</strong>
-                                        <small class="text-muted"> - {{ waypoint.order.client.name }}</small>
+                                        <small class="text-muted"> - {% if waypoint.order %}{{ waypoint.order.client.name }}{% else %}Centralrest - Fábrica{% endif %}</small>
                                     </div>
                                     <div class="small text-muted">
                                         <i class="bi bi-geo-alt"></i> {{ waypoint.address.street }}, {{ waypoint.address.city }}
