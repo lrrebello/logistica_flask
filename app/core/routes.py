@@ -9,7 +9,7 @@ core_bp = Blueprint('core', __name__)
 @core_bp.route('/dashboard')
 @login_required
 def dashboard():
-    if current_user.role not in ['admin', 'user']:
+    if current_user.role not in ['admin', 'user', 'driver']:
         flash('Acesso negado', 'danger')
         return redirect(url_for('auth.logout'))
     
