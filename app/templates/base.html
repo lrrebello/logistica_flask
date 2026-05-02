@@ -1,8 +1,11 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-PT">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="theme-color" content="#667eea">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>{% block title %}Logística Irmãos Monteiro{% endblock %}</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
@@ -16,15 +19,201 @@
             --bs-info: #3b82f6;
         }
         
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        
         body {
             background-color: #f9fafb;
+            font-size: 14px;
+            -webkit-font-smoothing: antialiased;
         }
         
         .sidebar {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 20px 0;
+            transition: transform 0.3s ease-in-out;
+            z-index: 1050;
+        }
+        
+        .menu-toggle {
+            position: fixed;
+            top: 15px;
+            left: 15px;
+            z-index: 1060;
+            background: #667eea;
+            border: none;
             color: white;
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+        
+        .menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 1040;
+            display: none;
+        }
+        
+        .card {
+            border: none;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+            border-radius: 16px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 16px;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
+        
+        .stat-card .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--bs-primary);
+        }
+        
+        .stat-card .stat-label {
+            color: #6b7280;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn {
+            border-radius: 12px;
+            padding: 10px 16px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .btn-sm {
+            padding: 6px 12px;
+            border-radius: 10px;
+        }
+        
+        .table-responsive {
+            border-radius: 16px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        
+        .table {
+            min-width: 500px;
+        }
+        
+        .table td, .table th {
+            padding: 12px 8px;
+            vertical-align: middle;
+        }
+        
+        .badge {
+            padding: 4px 8px;
+            font-weight: 500;
+            border-radius: 20px;
+        }
+        
+        .mobile-header {
+            display: none;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 1030;
+            padding: 12px 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border-bottom: 1px solid #e5e7eb;
+        }
+        
+        .mobile-header .page-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 0;
+            color: #1f2937;
+        }
+        
+        .user-info-mobile {
+            display: none;
+        }
+        
+        @media (min-width: 768px) {
+            .sidebar {
+                position: sticky;
+                top: 0;
+                height: 100vh;
+                overflow-y: auto;
+            }
+            .menu-toggle {
+                display: none !important;
+            }
+            main {
+                padding-top: 0 !important;
+            }
+            .mobile-header {
+                display: none !important;
+            }
+        }
+        
+        @media (max-width: 767.98px) {
+            .sidebar {
+                position: fixed;
+                left: 0;
+                top: 0;
+                width: 280px;
+                transform: translateX(-100%);
+                overflow-y: auto;
+                padding-top: 60px;
+            }
+            .sidebar.open {
+                transform: translateX(0);
+            }
+            .menu-toggle {
+                display: flex;
+            }
+            .menu-overlay.show {
+                display: block;
+            }
+            .mobile-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+            .user-info-mobile {
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            .user-info-desktop {
+                display: none;
+            }
+            main {
+                padding-top: 65px;
+            }
+            .col-md-10 {
+                padding: 0 12px;
+            }
+            h1.h2 {
+                font-size: 1.3rem;
+                margin-top: 0;
+            }
+            .row.mb-4 .col-md-3 {
+                margin-bottom: 12px;
+            }
+            .stat-card .stat-value {
+                font-size: 1.5rem;
+            }
         }
         
         .sidebar .nav-link {
@@ -32,6 +221,7 @@
             padding: 12px 20px;
             border-left: 3px solid transparent;
             transition: all 0.3s ease;
+            font-size: 0.95rem;
         }
         
         .sidebar .nav-link:hover,
@@ -41,64 +231,93 @@
             border-left-color: white;
         }
         
+        .sidebar .nav-link i {
+            width: 24px;
+            margin-right: 10px;
+            font-size: 1.1rem;
+        }
+        
         .navbar-brand {
             font-weight: 700;
-            font-size: 1.5rem;
+            font-size: 1.3rem;
             color: white !important;
         }
         
-        .card {
-            border: none;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            transition: all 0.3s ease;
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
         }
         
-        .card:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        .loading-spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
         
-        .stat-card {
-            background: white;
-            border-radius: 8px;
-            padding: 20px;
-            text-align: center;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
         
-        .stat-card .stat-value {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--bs-primary);
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1f2937;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 50px;
+            font-size: 14px;
+            z-index: 1100;
+            display: none;
+            white-space: nowrap;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         }
         
-        .stat-card .stat-label {
-            color: #6b7280;
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        
-        .btn-sm {
-            padding: 0.4rem 0.8rem;
-            font-size: 0.875rem;
-        }
-        
-        .table-hover tbody tr:hover {
-            background-color: #f3f4f6;
-        }
-        
-        .badge {
-            padding: 0.5rem 0.75rem;
-            font-weight: 500;
+        @media (max-width: 576px) {
+            .toast-notification {
+                white-space: normal;
+                text-align: center;
+                max-width: 90%;
+                font-size: 12px;
+            }
         }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <button class="menu-toggle" id="menuToggle">
+        <i class="bi bi-list"></i>
+    </button>
+    <div class="menu-overlay" id="menuOverlay"></div>
+    
+    <div class="mobile-header">
+        <div class="d-flex align-items-center gap-3">
+            <i class="bi bi-box-seam fs-4" style="color: #667eea;"></i>
+            <div class="page-title">{% block page_title_mobile %}Dashboard{% endblock %}</div>
+        </div>
+        <div class="user-info-mobile">
+            <i class="bi bi-person-circle fs-5 text-muted"></i>
+            <span class="small text-muted">{{ current_user.name or current_user.email }}</span>
+        </div>
+    </div>
+
     <div class="container-fluid">
         <div class="row">
-            <!-- Sidebar -->
-            <nav class="col-md-2 sidebar d-md-block">
-                <div class="text-center mb-4">
+            <nav class="col-md-2 sidebar" id="sidebar">
+                <div class="text-center mb-4 pt-4">
                     <h4 class="navbar-brand">Logística</h4>
                     <small>Irmãos Monteiro</small>
                 </div>
@@ -109,49 +328,41 @@
                             <i class="bi bi-speedometer2"></i> Dashboard
                         </a>
                     </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link {% if 'suppliers' in request.endpoint %}active{% endif %}" href="{{ url_for('suppliers.list') }}">
                             <i class="bi bi-building"></i> Fornecedores
                         </a>
                     </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link {% if 'products' in request.endpoint %}active{% endif %}" href="{{ url_for('products.list') }}">
                             <i class="bi bi-box-seam"></i> Produtos
                         </a>
                     </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link {% if 'stock' in request.endpoint %}active{% endif %}" href="{{ url_for('stock.list') }}">
                             <i class="bi bi-pie-chart"></i> Estoque
                         </a>
                     </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link {% if 'clients' in request.endpoint %}active{% endif %}" href="{{ url_for('clients.list') }}">
                             <i class="bi bi-people"></i> Clientes
                         </a>
                     </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link {% if 'orders' in request.endpoint %}active{% endif %}" href="{{ url_for('orders.list') }}">
                             <i class="bi bi-cart-check"></i> Pedidos
                         </a>
                     </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link {% if 'routes' in request.endpoint %}active{% endif %}" href="{{ url_for('routes.list') }}">
                             <i class="bi bi-map"></i> Rotas
                         </a>
                     </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link {% if 'vehicles' in request.endpoint %}active{% endif %}" href="{{ url_for('vehicles.list') }}">
                             <i class="bi bi-truck"></i> Veículos
                         </a>
                     </li>
-                    
                     <li class="nav-item">
                         <a class="nav-link {% if 'drivers' in request.endpoint %}active{% endif %}" href="{{ url_for('drivers.list') }}">
                             <i class="bi bi-person-badge"></i> Motoristas
@@ -170,11 +381,9 @@
                 </ul>
             </nav>
             
-            <!-- Main content -->
             <main class="col-md-10 ms-sm-auto px-md-4">
-                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+                <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom user-info-desktop">
                     <h1 class="h2">{% block page_title %}Dashboard{% endblock %}</h1>
-                    
                     <div class="btn-toolbar mb-2 mb-md-0">
                         <div class="btn-group me-2">
                             <span class="text-muted">
@@ -201,7 +410,57 @@
         </div>
     </div>
     
+    <div class="toast-notification" id="toastNotification"></div>
+    <div class="loading-overlay" id="loadingOverlay">
+        <div class="loading-spinner"></div>
+    </div>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        const menuOverlay = document.getElementById('menuOverlay');
+        
+        function openMenu() {
+            sidebar.classList.add('open');
+            menuOverlay.classList.add('show');
+            document.body.style.overflow = 'hidden';
+        }
+        
+        function closeMenu() {
+            sidebar.classList.remove('open');
+            menuOverlay.classList.remove('show');
+            document.body.style.overflow = '';
+        }
+        
+        if (menuToggle) menuToggle.addEventListener('click', openMenu);
+        if (menuOverlay) menuOverlay.addEventListener('click', closeMenu);
+        
+        document.querySelectorAll('.sidebar .nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                if (window.innerWidth < 768) closeMenu();
+            });
+        });
+        
+        function showToast(message, duration = 3000) {
+            const toast = document.getElementById('toastNotification');
+            toast.textContent = message;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, duration);
+        }
+        
+        function showLoading() { document.getElementById('loadingOverlay').style.display = 'flex'; }
+        function hideLoading() { document.getElementById('loadingOverlay').style.display = 'none'; }
+        
+        setTimeout(() => {
+            document.querySelectorAll('.alert').forEach(alert => {
+                setTimeout(() => {
+                    alert.style.opacity = '0';
+                    setTimeout(() => alert.remove(), 300);
+                }, 5000);
+            });
+        }, 1000);
+    </script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>
