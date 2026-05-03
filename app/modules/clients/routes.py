@@ -12,12 +12,14 @@ def list():
     clients = Client.query.paginate(page=page, per_page=10)
     return render_template('clients/list.html', clients=clients)
 
+
 @clients_bp.route('/new', methods=['GET', 'POST'])
 @login_required
 def new():
     stop_time_configs = StopTimeConfig.query.filter_by(is_active=True).all()
     
     if request.method == 'POST':
+        # ==================== CRIAR CLIENTE ====================
         client = Client(
             name=request.form.get('name'),
             nif=request.form.get('nif'),
@@ -29,11 +31,30 @@ def new():
             needs_delivery_ramp=True if request.form.get('needs_delivery_ramp') else False
         )
         db.session.add(client)
+        db.session.flush()  # Para obter o client.id antes de criar o endereço
+        
+        # ==================== CRIAR ENDEREÇO PRINCIPAL ====================
+        address = Address(
+            client_id=client.id,
+            street=request.form.get('street'),
+            city=request.form.get('city'),
+            postal_code=request.form.get('postal_code'),
+            latitude=request.form.get('latitude') or None,
+            longitude=request.form.get('longitude') or None,
+            is_headquarters=True if request.form.get('is_headquarters') else False,
+            is_delivery_point=True if request.form.get('is_delivery_point') else False,
+            delivery_instructions=request.form.get('delivery_instructions'),
+            time_window_start=request.form.get('time_window_start') or None,
+            time_window_end=request.form.get('time_window_end') or None
+        )
+        db.session.add(address)
+        
         db.session.commit()
         flash('Cliente criado com sucesso', 'success')
         return redirect(url_for('clients.list'))
     
-    return render_template('clients/form.html', client=None, stop_time_configs=stop_time_configs)
+    return render_template('clients/form.html', client=None, address=None, stop_time_configs=stop_time_configs)
+
 
 @clients_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -41,7 +62,11 @@ def edit(id):
     client = Client.query.get_or_404(id)
     stop_time_configs = StopTimeConfig.query.filter_by(is_active=True).all()
     
+    # Buscar o endereço principal (primeiro endereço)
+    address = client.addresses[0] if client.addresses else None
+    
     if request.method == 'POST':
+        # ==================== ATUALIZAR CLIENTE ====================
         client.name = request.form.get('name')
         client.nif = request.form.get('nif')
         client.email = request.form.get('email')
@@ -50,11 +75,43 @@ def edit(id):
         client.custom_stop_time = request.form.get('custom_stop_time') or None
         client.average_pallets = request.form.get('average_pallets', 1)
         client.needs_delivery_ramp = True if request.form.get('needs_delivery_ramp') else False
+        
+        # ==================== ATUALIZAR OU CRIAR ENDEREÇO PRINCIPAL ====================
+        if address:
+            # Atualizar endereço existente
+            address.street = request.form.get('street')
+            address.city = request.form.get('city')
+            address.postal_code = request.form.get('postal_code')
+            address.latitude = request.form.get('latitude') or None
+            address.longitude = request.form.get('longitude') or None
+            address.is_headquarters = True if request.form.get('is_headquarters') else False
+            address.is_delivery_point = True if request.form.get('is_delivery_point') else False
+            address.delivery_instructions = request.form.get('delivery_instructions')
+            address.time_window_start = request.form.get('time_window_start') or None
+            address.time_window_end = request.form.get('time_window_end') or None
+        else:
+            # Criar novo endereço
+            address = Address(
+                client_id=client.id,
+                street=request.form.get('street'),
+                city=request.form.get('city'),
+                postal_code=request.form.get('postal_code'),
+                latitude=request.form.get('latitude') or None,
+                longitude=request.form.get('longitude') or None,
+                is_headquarters=True if request.form.get('is_headquarters') else False,
+                is_delivery_point=True if request.form.get('is_delivery_point') else False,
+                delivery_instructions=request.form.get('delivery_instructions'),
+                time_window_start=request.form.get('time_window_start') or None,
+                time_window_end=request.form.get('time_window_end') or None
+            )
+            db.session.add(address)
+        
         db.session.commit()
         flash('Cliente atualizado com sucesso', 'success')
         return redirect(url_for('clients.list'))
     
-    return render_template('clients/form.html', client=client, stop_time_configs=stop_time_configs)
+    return render_template('clients/form.html', client=client, address=address, stop_time_configs=stop_time_configs)
+
 
 @clients_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
@@ -64,6 +121,7 @@ def delete(id):
     db.session.commit()
     flash('Cliente deletado com sucesso', 'success')
     return redirect(url_for('clients.list'))
+
 
 # Endereços do Cliente (Sede e Descarga)
 @clients_bp.route('/<int:client_id>/addresses/new', methods=['GET', 'POST'])
@@ -90,6 +148,7 @@ def address_new(client_id):
         return redirect(url_for('clients.edit', id=client.id))
     return render_template('clients/address_form.html', client=client, address=None)
 
+
 @clients_bp.route('/address/<int:address_id>/delete', methods=['POST'])
 @login_required
 def address_delete(address_id):
@@ -99,3 +158,25 @@ def address_delete(address_id):
     db.session.commit()
     flash('Endereço removido com sucesso', 'success')
     return redirect(url_for('clients.edit', id=client_id))
+
+
+@clients_bp.route('/address/<int:address_id>/edit', methods=['GET', 'POST'])
+@login_required
+def address_edit(address_id):
+    address = Address.query.get_or_404(address_id)
+    client = address.client
+    if request.method == 'POST':
+        address.street = request.form.get('street')
+        address.city = request.form.get('city')
+        address.postal_code = request.form.get('postal_code')
+        address.latitude = request.form.get('latitude') or None
+        address.longitude = request.form.get('longitude') or None
+        address.is_headquarters = True if request.form.get('is_headquarters') else False
+        address.is_delivery_point = True if request.form.get('is_delivery_point') else False
+        address.delivery_instructions = request.form.get('delivery_instructions')
+        address.time_window_start = request.form.get('time_window_start') or None
+        address.time_window_end = request.form.get('time_window_end') or None
+        db.session.commit()
+        flash('Endereço atualizado com sucesso', 'success')
+        return redirect(url_for('clients.edit', id=client.id))
+    return render_template('clients/address_form.html', client=client, address=address)

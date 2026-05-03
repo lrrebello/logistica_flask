@@ -8,6 +8,33 @@
 <div class="row justify-content-center">
     <div class="col-md-8">
         <form method="POST">
+            <!-- Preenchimento Rápido via Google Maps (sem biblioteca externa) -->
+            <div class="card mb-4 border-info">
+                <div class="card-header bg-info text-white">
+                    <h6 class="mb-0"><i class="bi bi-geo-alt"></i> Preenchimento Rápido via Google Maps</h6>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Link do Google Maps (opcional)</label>
+                        <div class="input-group">
+                            <input type="url" class="form-control" id="google_maps_link" placeholder="https://www.google.com/maps/place/Nome+Local/@39.7120821,-8.7134548,17z">
+                            <button class="btn btn-info" type="button" id="fetchAddressBtn">
+                                <i class="bi bi-arrow-repeat"></i> Buscar Morada
+                            </button>
+                        </div>
+                        <div class="form-text">
+                            Cole o link completo do Google Maps (com coordenadas) e clique em "Buscar Morada".<br>
+                            O sistema irá extrair automaticamente as coordenadas e preencher os campos.
+                        </div>
+                    </div>
+                    <div id="addressPreview" class="alert alert-secondary d-none">
+                        <strong>Pré-visualização:</strong>
+                        <div id="previewContent"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Informações Básicas -->
             <div class="card mb-4">
                 <div class="card-header bg-white py-3">
                     <h5 class="mb-0">Informações Básicas</h5>
@@ -36,10 +63,74 @@
                 </div>
             </div>
 
-            <!-- ========================================== -->
-            <!-- CONFIGURAÇÃO DE TEMPO DE PARADA (ADICIONAR AQUI) -->
-            <!-- ========================================== -->
-            <div class="card mb-3">
+            <!-- Endereço Principal -->
+            <div class="card mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Endereço Principal</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label for="street" class="form-label">Rua / Avenida</label>
+                        <input type="text" class="form-control" id="street" name="street" value="{{ address.street if address else '' }}" required>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="city" class="form-label">Cidade</label>
+                            <input type="text" class="form-control" id="city" name="city" value="{{ address.city if address else '' }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="postal_code" class="form-label">Código Postal</label>
+                            <input type="text" class="form-control" id="postal_code" name="postal_code" value="{{ address.postal_code if address else '' }}" placeholder="1234-567" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="latitude" class="form-label">Latitude</label>
+                            <input type="number" step="any" class="form-control" id="latitude" name="latitude" value="{{ address.latitude if address else '' }}" placeholder="0.0000">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="longitude" class="form-label">Longitude</label>
+                            <input type="number" step="any" class="form-control" id="longitude" name="longitude" value="{{ address.longitude if address else '' }}" placeholder="0.0000">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="is_headquarters" name="is_headquarters" {% if address and address.is_headquarters %}checked{% endif %}>
+                                <label class="form-check-label" for="is_headquarters">Esta é a sede da empresa</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="is_delivery_point" name="is_delivery_point" {% if address and address.is_delivery_point %}checked{% endif %}>
+                                <label class="form-check-label" for="is_delivery_point">Ponto de entrega/descarga</label>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3 mt-3">
+                        <label for="delivery_instructions" class="form-label">Instruções de Entrega</label>
+                        <textarea class="form-control" id="delivery_instructions" name="delivery_instructions" rows="2" placeholder="Ex: Entrada pela porta lateral, tocar campainha...">{{ address.delivery_instructions if address else '' }}</textarea>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="time_window_start" class="form-label">Horário Preferencial (Início)</label>
+                            <input type="time" class="form-control" id="time_window_start" name="time_window_start" value="{{ address.time_window_start if address and address.time_window_start else '' }}">
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label for="time_window_end" class="form-label">Horário Preferencial (Fim)</label>
+                            <input type="time" class="form-control" id="time_window_end" name="time_window_end" value="{{ address.time_window_end if address and address.time_window_end else '' }}">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Configuração de Tempo de Parada -->
+            <div class="card mb-4">
                 <div class="card-header bg-white py-3">
                     <h6 class="mb-0"><i class="bi bi-clock"></i> Configuração de Tempo de Parada</h6>
                 </div>
@@ -72,11 +163,11 @@
             </div>
         </form>
 
-        <!-- Seção de endereços (se existir) -->
-        {% if client and client.addresses %}
+        <!-- Seção de endereços adicionais (se existir) -->
+        {% if client and client.addresses and client.addresses|length > 1 %}
         <div class="card mt-4">
             <div class="card-header d-flex justify-content-between align-items-center bg-white py-3">
-                <h5 class="mb-0">Endereços Cadastrados</h5>
+                <h5 class="mb-0">Outros Endereços</h5>
                 <a href="{{ url_for('clients.address_new', client_id=client.id) }}" class="btn btn-outline-success btn-sm">
                     <i class="bi bi-geo-alt"></i> Novo Endereço
                 </a>
@@ -84,27 +175,37 @@
             <div class="card-body p-0">
                 <ul class="list-group list-group-flush">
                     {% for addr in client.addresses %}
-                    <li class="list-group-item p-3">
-                        <div class="d-flex justify-content-between align-items-start">
-                            <div>
-                                <div class="fw-bold">{{ addr.street }}</div>
-                                <div class="text-muted small">{{ addr.city }} - CEP: {{ addr.postal_code }}</div>
-                                <div class="mt-2">
-                                    {% if addr.is_headquarters %}
-                                        <span class="badge bg-primary">Sede</span>
-                                    {% endif %}
-                                    {% if addr.is_delivery_point %}
-                                        <span class="badge bg-success">Ponto de Entrega</span>
-                                    {% endif %}
+                        {% if not address or addr.id != address.id %}
+                        <li class="list-group-item p-3">
+                            <div class="d-flex justify-content-between align-items-start">
+                                <div>
+                                    <div class="fw-bold">{{ addr.street }}</div>
+                                    <div class="text-muted small">{{ addr.city }} - {{ addr.postal_code }}</div>
+                                    <div class="mt-2">
+                                        {% if addr.is_headquarters %}
+                                            <span class="badge bg-primary">Sede</span>
+                                        {% endif %}
+                                        {% if addr.is_delivery_point %}
+                                            <span class="badge bg-success">Ponto de Entrega</span>
+                                        {% endif %}
+                                        {% if addr.latitude and addr.longitude %}
+                                            <span class="badge bg-info">GPS: {{ addr.latitude|round(4) }}, {{ addr.longitude|round(4) }}</span>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                                <div class="btn-group">
+                                    <a href="{{ url_for('clients.address_edit', address_id=addr.id) }}" class="btn btn-sm btn-outline-primary">
+                                        <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <form action="{{ url_for('clients.address_delete', address_id=addr.id) }}" method="POST" class="d-inline" onsubmit="return confirm('Remover este endereço?')">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
                                 </div>
                             </div>
-                            <div>
-                                <button type="button" class="btn btn-sm btn-outline-danger" onclick="alert('Em desenvolvimento')">
-                                    <i class="bi bi-trash"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </li>
+                        </li>
+                        {% endif %}
                     {% endfor %}
                 </ul>
             </div>
@@ -112,4 +213,194 @@
         {% endif %}
     </div>
 </div>
+
+<script>
+    // Função para mostrar mensagens de diagnóstico na página
+    function debugMessage(message, isError = false) {
+        const previewDiv = document.getElementById('addressPreview');
+        const previewContent = document.getElementById('previewContent');
+        
+        if (previewDiv && previewContent) {
+            previewDiv.classList.remove('d-none');
+            const color = isError ? '#dc3545' : '#0d6efd';
+            previewContent.innerHTML += `<div style="color: ${color}; margin-bottom: 5px;"><small>🔄 ${message}</small></div>`;
+            console.log(message);
+        } else {
+            console.log("DEBUG: " + message);
+        }
+    }
+    
+    function showToast(message, isError = false) {
+        const toast = document.createElement('div');
+        toast.className = 'toast-notification';
+        toast.style.backgroundColor = isError ? '#dc3545' : '#1f2937';
+        toast.style.color = 'white';
+        toast.style.position = 'fixed';
+        toast.style.bottom = '20px';
+        toast.style.left = '50%';
+        toast.style.transform = 'translateX(-50%)';
+        toast.style.padding = '10px 20px';
+        toast.style.borderRadius = '50px';
+        toast.style.fontSize = '14px';
+        toast.style.zIndex = '9999';
+        toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // Função principal de extração
+    function fetchAddressFromGoogleMaps(url) {
+        const fetchBtn = document.getElementById('fetchAddressBtn');
+        const previewDiv = document.getElementById('addressPreview');
+        const previewContent = document.getElementById('previewContent');
+        
+        // --- Verificação 1: Elementos existem? ---
+        if (!previewDiv || !previewContent) {
+            alert('ERRO CRÍTICO: Elementos do preview não encontrados na página. O script não vai funcionar.');
+            console.error('Elementos do preview não encontrados');
+            return;
+        }
+        
+        // Limpar e mostrar área de diagnóstico
+        previewDiv.classList.remove('d-none');
+        previewContent.innerHTML = '<strong>🔄 A processar o link...</strong><br><hr>';
+        debugMessage("1. Função iniciada.");
+        
+        try {
+            fetchBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Processando...';
+            fetchBtn.disabled = true;
+            
+            debugMessage(`2. A analisar URL: ${url}`);
+            
+            let lat = null;
+            let lng = null;
+            let placeName = null;
+            
+            // --- Passo 2: Extrair coordenadas com regex ---
+            debugMessage("3. A tentar extrair coordenadas com Regex...");
+            
+            // Padrão 1: /@lat,lng,zoom
+            let match = url.match(/\/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+            if (match) {
+                lat = parseFloat(match[1]);
+                lng = parseFloat(match[2]);
+                debugMessage(`   ✅ Padrão 1 encontrado! Lat: ${lat}, Lng: ${lng}`);
+            }
+            
+            // Padrão 2: !3dlat!4dlng
+            if (!lat || !lng) {
+                const latMatch = url.match(/!3d(-?\d+\.\d+)/);
+                const lngMatch = url.match(/!4d(-?\d+\.\d+)/);
+                if (latMatch && lngMatch) {
+                    lat = parseFloat(latMatch[1]);
+                    lng = parseFloat(lngMatch[1]);
+                    debugMessage(`   ✅ Padrão 2 encontrado! Lat: ${lat}, Lng: ${lng}`);
+                }
+            }
+            
+            // Padrão 3: /maps/search/lat,lng
+            if (!lat || !lng) {
+                const searchMatch = url.match(/\/search\/(-?\d+\.\d+),(-?\d+\.\d+)/);
+                if (searchMatch) {
+                    lat = parseFloat(searchMatch[1]);
+                    lng = parseFloat(searchMatch[2]);
+                    debugMessage(`   ✅ Padrão 3 encontrado! Lat: ${lat}, Lng: ${lng}`);
+                }
+            }
+            
+            // Extrair nome do local
+            const nameMatch = url.match(/\/place\/([^\/@?]+)/);
+            if (nameMatch) {
+                placeName = decodeURIComponent(nameMatch[1].replace(/\+/g, ' '));
+                debugMessage(`4. Nome do local extraído: ${placeName}`);
+            } else {
+                debugMessage("4. Não foi possível extrair nome do local.", true);
+            }
+            
+            // --- Passo 3: Verificar se coordenadas foram encontradas ---
+            if (lat && lng) {
+                debugMessage(`5. ✅ SUCESSO! Coordenadas finais: ${lat}, ${lng}`);
+                
+                // Preencher campos do formulário
+                const latField = document.getElementById('latitude');
+                const lngField = document.getElementById('longitude');
+                const nameField = document.getElementById('name');
+                
+                if (latField) {
+                    latField.value = lat.toFixed(6);
+                    debugMessage("   → Campo 'latitude' preenchido.");
+                } else { debugMessage("   ❌ Campo 'latitude' não encontrado!", true); }
+                
+                if (lngField) {
+                    lngField.value = lng.toFixed(6);
+                    debugMessage("   → Campo 'longitude' preenchido.");
+                } else { debugMessage("   ❌ Campo 'longitude' não encontrado!", true); }
+                
+                if (nameField && placeName && !nameField.value) {
+                    nameField.value = placeName;
+                    debugMessage("   → Campo 'name' preenchido com o nome do local.");
+                }
+                
+                previewContent.innerHTML = `
+                    <strong>✅ Morada preenchida com sucesso!</strong><br>
+                    <strong>Latitude:</strong> ${lat.toFixed(6)}<br>
+                    <strong>Longitude:</strong> ${lng.toFixed(6)}<br>
+                    <strong>Local:</strong> ${placeName || 'N/A'}<br>
+                    <hr>
+                    <small><i class="bi bi-check-circle-fill"></i> As coordenadas foram extraídas do link e os campos foram atualizados.</small>
+                `;
+                showToast('✅ Coordenadas extraídas e campos preenchidos!');
+                
+            } else {
+                // --- Passo 4: Falha na extração ---
+                debugMessage("5. ❌ FALHA: Não foi possível extrair coordenadas.", true);
+                previewContent.innerHTML = `
+                    <strong>⚠️ Não foi possível extrair coordenadas do link.</strong><br>
+                    <small>O link não contém o padrão de coordenadas esperado.<br>
+                    Certifique-se de que está a usar o link completo do Google Maps, por exemplo:<br>
+                    <code>https://www.google.com/maps/place/Nome+Local/@39.7120821,-8.7134548,17z</code><br>
+                    O link que usou foi: <br><code>${url}</code></small>
+                `;
+                showToast('⚠️ Não foi possível extrair coordenadas. Verifique o link.', true);
+            }
+            
+        } catch (error) {
+            console.error('Erro capturado:', error);
+            debugMessage(`❌ ERRO: ${error.message}`, true);
+            previewContent.innerHTML = `<strong>❌ Ocorreu um erro inesperado:</strong><br>${error.message}`;
+            showToast('❌ Erro: ' + error.message, true);
+        } finally {
+            fetchBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i> Buscar Morada';
+            fetchBtn.disabled = false;
+            debugMessage("6. Processo concluído.");
+        }
+    }
+
+    // --- Garantir que os elementos existem antes de associar o evento ---
+    document.addEventListener('DOMContentLoaded', function() {
+        const fetchBtn = document.getElementById('fetchAddressBtn');
+        if (fetchBtn) {
+            fetchBtn.addEventListener('click', () => {
+                const urlInput = document.getElementById('google_maps_link');
+                if (!urlInput) {
+                    showToast('Campo de link não encontrado', true);
+                    return;
+                }
+                const url = urlInput.value.trim();
+                if (!url) {
+                    showToast('Por favor, cole um link do Google Maps', true);
+                    return;
+                }
+                fetchAddressFromGoogleMaps(url);
+            });
+            console.log('✅ Script de busca de morada carregado com sucesso!');
+        } else {
+            console.error('❌ Botão "Buscar Morada" não encontrado na página.');
+        }
+    });
+</script>
 {% endblock %}
