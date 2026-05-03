@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}Planejar Rota - Logística{% endblock %}
+{% block title %}{{ 'Editar' if route else 'Planejar' }} Rota - Logística{% endblock %}
 
-{% block page_title %}Planejar Rota de Entrega{% endblock %}
+{% block page_title %}{{ 'Editar' if route else 'Planejar' }} Rota{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -36,10 +36,6 @@
     .client-card {
         border-left: 3px solid #667eea;
     }
-    .drag-over {
-        border: 2px dashed #667eea;
-        background-color: #f0f0ff;
-    }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@latest/css/sortable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -60,7 +56,6 @@
                         <input type="text" class="form-control" id="route_number" name="route_number" 
                                value="{{ route.route_number if route else '' }}" required 
                                placeholder="Ex: 280">
-                        <div class="form-text">Ex: 280, 30, 45</div>
                     </div>
                     
                     <div class="mb-3">
@@ -74,13 +69,11 @@
                         <label for="region" class="form-label">Região</label>
                         <select class="form-select" id="region" name="region">
                             <option value="">Selecione...</option>
-                            <option value="Algarve">Algarve</option>
-                            <option value="Alentejo">Alentejo</option>
-                            <option value="Lisboa">Lisboa</option>
-                            <option value="Centro">Centro</option>
-                            <option value="Norte">Norte</option>
-                            <option value="Madeira">Madeira</option>
-                            <option value="Açores">Açores</option>
+                            <option value="Algarve" {% if route and route.region == 'Algarve' %}selected{% endif %}>Algarve</option>
+                            <option value="Alentejo" {% if route and route.region == 'Alentejo' %}selected{% endif %}>Alentejo</option>
+                            <option value="Lisboa" {% if route and route.region == 'Lisboa' %}selected{% endif %}>Lisboa</option>
+                            <option value="Centro" {% if route and route.region == 'Centro' %}selected{% endif %}>Centro</option>
+                            <option value="Norte" {% if route and route.region == 'Norte' %}selected{% endif %}>Norte</option>
                         </select>
                     </div>
                     
@@ -119,18 +112,17 @@
                         <textarea class="form-control" id="notes" name="notes" rows="3">{{ route.notes if route else '' }}</textarea>
                     </div>
                     
-                    <!-- Campo oculto para sequência -->
                     <input type="hidden" id="waypoints_order" name="waypoints_order" value="">
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-save"></i> {{ 'Atualizar' if route else 'Criar' }} Rota
+                        </button>
+                        <a href="{{ url_for('routes.list') }}" class="btn btn-light">Cancelar</a>
+                    </div>
+                </form>
             </div>
         </div>
-        
-        <div class="d-grid gap-2">
-            <button type="submit" class="btn btn-primary btn-lg">
-                <i class="bi bi-save"></i> Salvar Rota
-            </button>
-            <a href="{{ url_for('routes.list') }}" class="btn btn-light">Cancelar</a>
-        </div>
-        </form>
     </div>
 
     <!-- Seleção e Ordenação de Pedidos -->
@@ -138,7 +130,7 @@
         <!-- Pedidos disponíveis para adicionar -->
         <div class="card mb-4">
             <div class="card-header bg-white py-3">
-                <h5 class="mb-0">Pedidos Pendentes</h5>
+                <h5 class="mb-0">Pedidos Pendentes ({{ orders|length }})</h5>
             </div>
             <div class="card-body p-0">
                 <div class="table-responsive">
@@ -150,13 +142,12 @@
                                 </th>
                                 <th>Pedido</th>
                                 <th>Cliente</th>
-                                <th>Cidade</th>
+                                <th>Endereço</th>
                                 <th>Prioridade</th>
-                                <th>Horário</th>
-                            </tr>
+                             </tr>
                         </thead>
                         <tbody>
-                            {% for order in available_orders %}
+                            {% for order in orders %}
                             <tr>
                                 <td>
                                     <input type="checkbox" class="order-checkbox" value="{{ order.id }}">
@@ -166,7 +157,15 @@
                                     <small class="text-muted d-block">{{ order.created_at.strftime('%d/%m/%Y') }}</small>
                                 </td>
                                 <td>{{ order.client.name }}</td>
-                                <td>{{ order.address.city }}</td>
+                                <td>
+                                    <small>
+                                        {% if order.address %}
+                                            {{ order.address.street }}, {{ order.address.city }}
+                                        {% else %}
+                                            <span class="text-muted">Sem endereço</span>
+                                        {% endif %}
+                                    </small>
+                                </td>
                                 <td>
                                     {% if order.priority == 'urgent' %}
                                         <span class="badge bg-danger">Urgente</span>
@@ -176,19 +175,13 @@
                                         <span class="badge bg-secondary">Normal</span>
                                     {% endif %}
                                 </td>
-                                <td>
-                                    {% if order.address.time_window_start %}
-                                        {{ order.address.time_window_start.strftime('%H:%M') }} - 
-                                        {{ order.address.time_window_end.strftime('%H:%M') }}
-                                    {% else %}
-                                        -
-                                    {% endif %}
-                                </td>
                             </tr>
                             {% else %}
                             <tr>
-                                <td colspan="6" class="text-center py-5 text-muted">
-                                    Não há pedidos pendentes para esta região.
+                                <td colspan="5" class="text-center py-5 text-muted">
+                                    <i class="bi bi-inbox display-4 d-block mb-3"></i>
+                                    Não há pedidos pendentes disponíveis.<br>
+                                    <small>Todos os pedidos já estão atribuídos a rotas ou foram concluídos.</small>
                                 </td>
                             </tr>
                             {% endfor %}
@@ -206,7 +199,7 @@
         <!-- Waypoints da Rota (Ordenáveis) -->
         <div class="card">
             <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Entregas da Rota</h5>
+                <h5 class="mb-0">Entregas da Rota ({{ waypoints|length }})</h5>
                 <div>
                     <button type="button" class="btn btn-outline-primary btn-sm" id="optimizeBtn">
                         <i class="bi bi-robot"></i> Otimizar com IA
@@ -228,21 +221,20 @@
                                 <span class="sequence-badge">{{ waypoint.sequence_order }}</span>
                                 <div class="d-inline-block">
                                     <div>
-                                        <strong>#{{ waypoint.order.order_number }}</strong>
-                                        <small class="text-muted"> - {% if waypoint.order %}{{ waypoint.order.client.name }}{% else %}Centralrest - Fábrica{% endif %}</small>
+                                        <strong>#{{ waypoint.order.order_number if waypoint.order else 'Centralrest' }}</strong>
+                                        <small class="text-muted"> - {% if waypoint.order %}{{ waypoint.order.client.name }}{% else %}Ponto de partida/retorno{% endif %}</small>
                                     </div>
                                     <div class="small text-muted">
-                                        <i class="bi bi-geo-alt"></i> {{ waypoint.address.street }}, {{ waypoint.address.city }}
+                                        <i class="bi bi-geo-alt"></i> {% if waypoint.address %}{{ waypoint.address.street }}, {{ waypoint.address.city }}{% else %}Endereço não disponível{% endif %}
                                     </div>
                                 </div>
                             </div>
                             <div class="btn-group">
-                                <button type="button" class="btn btn-sm btn-outline-info view-order" data-id="{{ waypoint.order_id }}">
-                                    <i class="bi bi-eye"></i>
-                                </button>
+                                {% if waypoint.order %}
                                 <button type="button" class="btn btn-sm btn-outline-danger remove-waypoint" data-id="{{ waypoint.order_id }}">
                                     <i class="bi bi-x-lg"></i>
                                 </button>
+                                {% endif %}
                             </div>
                         </div>
                     </li>
@@ -278,23 +270,23 @@ var sortable = new Sortable(document.getElementById('sortable-list'), {
     handle: '.sortable-handle',
     onEnd: function() {
         updateSequenceNumbers();
+        saveNewOrder();
     }
 });
 
-// Atualizar números de sequência
 function updateSequenceNumbers() {
     var items = document.querySelectorAll('#sortable-list .sortable-item');
     items.forEach(function(item, index) {
         var seq = index + 1;
-        // Atualizar badge
         item.querySelector('.sequence-badge').textContent = seq;
-        // Atualizar data attribute
         item.setAttribute('data-sequence', seq);
     });
-    
-    // Atualizar campo oculto com ordem
+    document.getElementById('totalWaypoints').textContent = items.length;
+}
+
+function saveNewOrder() {
     var order = [];
-    items.forEach(function(item) {
+    document.querySelectorAll('#sortable-list .sortable-item').forEach(function(item) {
         order.push(item.getAttribute('data-id'));
     });
     document.getElementById('waypoints_order').value = order.join(',');
@@ -317,51 +309,76 @@ document.getElementById('addSelectedBtn')?.addEventListener('click', function() 
         return;
     }
     
-    // Enviar via AJAX
-    fetch(window.location.href, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: 'add_waypoints=' + selected.join(',') + '&action=add'
-    }).then(response => {
-        if (response.ok) location.reload();
-        else alert('Erro ao adicionar pedidos');
-    });
+    var form = document.getElementById('routeForm');
+    var actionInput = document.createElement('input');
+    actionInput.type = 'hidden';
+    actionInput.name = 'action';
+    actionInput.value = 'add';
+    form.appendChild(actionInput);
+    
+    var waypointsInput = document.createElement('input');
+    waypointsInput.type = 'hidden';
+    waypointsInput.name = 'add_waypoints';
+    waypointsInput.value = selected.join(',');
+    form.appendChild(waypointsInput);
+    
+    form.submit();
 });
 
 // Remover waypoint
-document.querySelectorAll('.remove-waypoint').forEach(function(btn) {
+document.querySelectorAll('.remove-waypoint').forEach(btn => {
     btn.addEventListener('click', function() {
         var orderId = this.getAttribute('data-id');
         if (confirm('Remover esta entrega da rota?')) {
-            fetch(window.location.href, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: 'remove_waypoint=' + orderId + '&action=remove'
-            }).then(response => {
-                if (response.ok) location.reload();
-                else alert('Erro ao remover pedido');
-            });
+            var form = document.getElementById('routeForm');
+            var actionInput = document.createElement('input');
+            actionInput.type = 'hidden';
+            actionInput.name = 'action';
+            actionInput.value = 'remove';
+            form.appendChild(actionInput);
+            
+            var waypointInput = document.createElement('input');
+            waypointInput.type = 'hidden';
+            waypointInput.name = 'remove_waypoint';
+            waypointInput.value = orderId;
+            form.appendChild(waypointInput);
+            
+            form.submit();
         }
     });
 });
 
 // Otimizar com IA
 document.getElementById('optimizeBtn')?.addEventListener('click', function() {
-    if (confirm('A IA vai reordenar as entregas para otimizar rotas. Deseja continuar?')) {
-        fetch(window.location.href, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded',
-            },
-            body: 'action=optimize'
-        }).then(response => {
-            if (response.ok) location.reload();
-            else alert('Erro ao otimizar rota');
-        });
+    if (confirm('A IA vai reordenar automaticamente todas as entregas para otimizar a rota. Deseja continuar?')) {
+        var form = document.getElementById('routeForm');
+        var actionInput = document.createElement('input');
+        actionInput.type = 'hidden';
+        actionInput.name = 'action';
+        actionInput.value = 'optimize';
+        form.appendChild(actionInput);
+        form.submit();
+    }
+});
+
+// Limpar selecionados
+document.getElementById('clearSelectedBtn')?.addEventListener('click', function() {
+    var selected = [];
+    document.querySelectorAll('#sortable-list .sortable-item .remove-waypoint').forEach(btn => {
+        var orderId = btn.getAttribute('data-id');
+        if (orderId) selected.push(orderId);
+    });
+    
+    if (selected.length === 0) {
+        alert('Não há entregas para remover');
+        return;
+    }
+    
+    if (confirm('Remover todas as entregas da rota?')) {
+        var promises = selected.map(orderId => 
+            fetch(window.location.href + '/remove/' + orderId, { method: 'POST' })
+        );
+        Promise.all(promises).then(() => location.reload());
     }
 });
 </script>

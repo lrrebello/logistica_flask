@@ -48,7 +48,8 @@ def list():
 def new():
     drivers = Driver.query.filter_by(status='active').all()
     vehicles = Vehicle.query.filter_by(status='available').all()
-    # Buscar pedidos pendentes (não atribuídos a nenhuma rota confirmada)
+    
+    # APENAS pedidos sem nenhuma rota (novos)
     orders = Order.query.filter(
         Order.status.in_(['pending', 'confirmed']),
         ~Order.route_waypoints.any()
@@ -66,6 +67,13 @@ def new():
                 for seq, order_id in enumerate(order_ids, 1):
                     if order_id:
                         order = Order.query.get(order_id)
+                        
+                        # VERIFICAR se o pedido já está noutra rota
+                        existing = RouteWaypoint.query.filter_by(order_id=order.id).first()
+                        if existing:
+                            flash(f'⚠️ Pedido #{order.order_number} já está na rota {existing.route.route_number}', 'warning')
+                            continue
+                        
                         if order and order.address_id:
                             waypoint = RouteWaypoint(
                                 route_id=route.id,
@@ -78,7 +86,7 @@ def new():
                             order.status = 'confirmed'
                 db.session.commit()
             return redirect(url_for('routes.edit', id=route_id))
-        
+            
         # Remover waypoint
         elif action == 'remove':
             order_id = request.form.get('remove_waypoint')
@@ -101,16 +109,24 @@ def new():
             route_id = request.args.get('id')
             if route_id:
                 route = Route.query.get(route_id)
-                waypoints = list(route.waypoints)
-                # Algoritmo simples: ordenar por prioridade e cidade
-                waypoints.sort(key=lambda w: (
+                # Filtrar apenas waypoints com pedido (ignorar início/fim)
+                deliveries = [wp for wp in route.waypoints if wp.order_id]
+                # Ordenar por prioridade
+                deliveries.sort(key=lambda w: (
                     0 if w.order.priority == 'urgent' else 1 if w.order.priority == 'high' else 2,
-                    w.address.city
+                    w.address.city if w.address else ''
                 ))
-                for seq, wp in enumerate(waypoints, 1):
+                # Manter início/fim
+                new_sequence = []
+                for wp in route.waypoints:
+                    if not wp.order_id:
+                        new_sequence.append(wp)
+                new_sequence.extend(deliveries)
+                for seq, wp in enumerate(new_sequence, 1):
                     wp.sequence_order = seq
-                    wp.is_optimized = True
-                    wp.optimized_by = 'ai'
+                    if wp.order_id:
+                        wp.is_optimized = True
+                        wp.optimized_by = 'ai'
                 route.was_optimized = True
                 route.last_optimization_date = datetime.utcnow()
                 route.optimization_method = 'ai_basic'
@@ -122,7 +138,6 @@ def new():
             # Gerar route_number se não foi enviado
             route_number = request.form.get('route_number')
             if not route_number:
-                # Gerar número automático: ROTA + data + sequência
                 today = date.today().strftime('%Y%m%d')
                 last_route = Route.query.order_by(Route.id.desc()).first()
                 next_num = (last_route.id + 1) if last_route else 1
@@ -181,10 +196,11 @@ def edit(id):
     drivers = Driver.query.filter_by(status='active').all()
     vehicles = Vehicle.query.filter_by(status='available').all()
     
-    # Pedidos disponíveis (não atribuídos a esta rota)
+    # Pedidos disponíveis: NÃO estão em nenhuma rota OU estão nesta rota
     orders = Order.query.filter(
         Order.status.in_(['pending', 'confirmed']),
-        ~Order.route_waypoints.any(RouteWaypoint.route_id != id)
+        (~Order.route_waypoints.any()) | 
+        (Order.route_waypoints.any(RouteWaypoint.route_id == id))
     ).all()
     
     if request.method == 'POST':
@@ -197,6 +213,16 @@ def edit(id):
             for seq, order_id in enumerate(order_ids, current_seq + 1):
                 if order_id:
                     order = Order.query.get(order_id)
+                    
+                    # VERIFICAR se o pedido já está noutra rota diferente desta
+                    existing = RouteWaypoint.query.filter(
+                        RouteWaypoint.order_id == order.id,
+                        RouteWaypoint.route_id != route.id
+                    ).first()
+                    if existing:
+                        flash(f'⚠️ Pedido #{order.order_number} já está na rota {existing.route.route_number}', 'warning')
+                        continue
+                    
                     if order and order.address_id:
                         waypoint = RouteWaypoint(
                             route_id=route.id,
@@ -209,7 +235,7 @@ def edit(id):
                         order.status = 'confirmed'
             db.session.commit()
             return redirect(url_for('routes.edit', id=id))
-        
+                
         # Remover waypoint
         elif action == 'remove':
             order_id = request.form.get('remove_waypoint')
@@ -229,14 +255,27 @@ def edit(id):
         # Otimizar
         elif action == 'optimize':
             route = Route.query.get(id)
-            waypoints = list(route.waypoints)
-            waypoints.sort(key=lambda w: (w.address.city, w.order.priority))
-            for seq, wp in enumerate(waypoints, 1):
+            # Filtrar apenas waypoints com pedido
+            deliveries = [wp for wp in route.waypoints if wp.order_id]
+            # Ordenar por prioridade e cidade
+            deliveries.sort(key=lambda w: (
+                0 if w.order.priority == 'urgent' else 1 if w.order.priority == 'high' else 2,
+                w.address.city if w.address else ''
+            ))
+            # Manter início/fim
+            new_sequence = []
+            for wp in route.waypoints:
+                if not wp.order_id:
+                    new_sequence.append(wp)
+            new_sequence.extend(deliveries)
+            for seq, wp in enumerate(new_sequence, 1):
                 wp.sequence_order = seq
-                wp.is_optimized = True
-                wp.optimized_by = 'ai'
+                if wp.order_id:
+                    wp.is_optimized = True
+                    wp.optimized_by = 'ai'
             route.was_optimized = True
             route.last_optimization_date = datetime.utcnow()
+            route.optimization_method = 'ai_basic'
             db.session.commit()
             return redirect(url_for('routes.edit', id=id))
         
