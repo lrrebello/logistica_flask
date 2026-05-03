@@ -255,6 +255,8 @@ class Route(db.Model):
     description = db.Column(db.Text)
     driver_id = db.Column(db.Integer, db.ForeignKey('drivers.id'), nullable=False)
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicles.id'), nullable=False)
+    start_address_id = db.Column(db.Integer, db.ForeignKey('addresses.id'), nullable=True)
+    end_address_id = db.Column(db.Integer, db.ForeignKey('addresses.id'), nullable=True)
     route_date = db.Column(db.Date, nullable=False)
     status = db.Column(db.String(20), default='planned')
     estimated_clients_count = db.Column(db.Integer)
@@ -274,6 +276,8 @@ class Route(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=True)
     
+    start_address = db.relationship('Address', foreign_keys=[start_address_id])
+    end_address = db.relationship('Address', foreign_keys=[end_address_id])
     driver = db.relationship('Driver', backref='routes')
     vehicle = db.relationship('Vehicle', backref='routes')
     waypoints = db.relationship('RouteWaypoint', backref='route', lazy=True, 

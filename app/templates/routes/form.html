@@ -44,6 +44,44 @@
 {% block content %}
 <div class="row">
     <!-- Configurações da Rota -->
+     <!-- Configuração de pontos fixos -->
+        <div class="card mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0"><i class="bi bi-geo-alt"></i> Pontos de Partida e Retorno</h5>
+            </div>
+            <div class="card-body p-4">
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <label for="start_address" class="form-label">Ponto de Partida (Carga)</label>
+                        <select class="form-select" id="start_address_id" name="start_address_id">
+                            <option value="">Selecione um endereço...</option>
+                            {% for addr in available_addresses %}
+                            <option value="{{ addr.id }}" {% if route and route.start_address_id == addr.id %}selected{% endif %}>
+                                {{ addr.street }}, {{ addr.city }} - {{ addr.postal_code }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Local onde a rota começa (ex: armazém, fábrica)</div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <label for="end_address" class="form-label">Ponto de Retorno (Descarga)</label>
+                        <select class="form-select" id="end_address_id" name="end_address_id">
+                            <option value="">Selecione um endereço...</option>
+                            {% for addr in available_addresses %}
+                            <option value="{{ addr.id }}" {% if route and route.end_address_id == addr.id %}selected{% endif %}>
+                                {{ addr.street }}, {{ addr.city }} - {{ addr.postal_code }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Local onde a rota termina (ex: armazém, fábrica)</div>
+                    </div>
+                </div>
+                <div class="alert alert-info small">
+                    <i class="bi bi-info-circle"></i> 
+                    <strong>Dica:</strong> Se não selecionar pontos fixos, o sistema usará a localização do primeiro e último pedido como pontos de partida/retorno.
+                </div>
+            </div>
+        </div>
     <div class="col-md-4">
         <div class="card mb-4">
             <div class="card-header bg-white py-3">

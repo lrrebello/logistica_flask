@@ -49,7 +49,10 @@ def new():
     drivers = Driver.query.filter_by(status='active').all()
     vehicles = Vehicle.query.filter_by(status='available').all()
     
-    # APENAS pedidos sem nenhuma rota (novos)
+    # Buscar endereços disponíveis para pontos fixos
+    available_addresses = Address.query.filter_by(is_delivery_point=True).all()
+    
+    # TODOS os pedidos pendentes ou confirmados que NÃO estão em nenhuma rota
     orders = Order.query.filter(
         Order.status.in_(['pending', 'confirmed']),
         ~Order.route_waypoints.any()
@@ -67,13 +70,6 @@ def new():
                 for seq, order_id in enumerate(order_ids, 1):
                     if order_id:
                         order = Order.query.get(order_id)
-                        
-                        # VERIFICAR se o pedido já está noutra rota
-                        existing = RouteWaypoint.query.filter_by(order_id=order.id).first()
-                        if existing:
-                            flash(f'⚠️ Pedido #{order.order_number} já está na rota {existing.route.route_number}', 'warning')
-                            continue
-                        
                         if order and order.address_id:
                             waypoint = RouteWaypoint(
                                 route_id=route.id,
@@ -86,7 +82,7 @@ def new():
                             order.status = 'confirmed'
                 db.session.commit()
             return redirect(url_for('routes.edit', id=route_id))
-            
+        
         # Remover waypoint
         elif action == 'remove':
             order_id = request.form.get('remove_waypoint')
@@ -109,14 +105,14 @@ def new():
             route_id = request.args.get('id')
             if route_id:
                 route = Route.query.get(route_id)
-                # Filtrar apenas waypoints com pedido (ignorar início/fim)
+                # Filtrar apenas waypoints com pedido (ignorar início/fim fixos)
                 deliveries = [wp for wp in route.waypoints if wp.order_id]
                 # Ordenar por prioridade
                 deliveries.sort(key=lambda w: (
                     0 if w.order.priority == 'urgent' else 1 if w.order.priority == 'high' else 2,
                     w.address.city if w.address else ''
                 ))
-                # Manter início/fim
+                # Manter pontos fixos (início/fim)
                 new_sequence = []
                 for wp in route.waypoints:
                     if not wp.order_id:
@@ -153,16 +149,31 @@ def new():
                 route_date=datetime.strptime(request.form.get('route_date'), '%Y-%m-%d').date(),
                 status='planned',
                 notes=request.form.get('notes'),
-                created_by_id=current_user.id
+                created_by_id=current_user.id,
+                start_address_id=request.form.get('start_address_id') or None,
+                end_address_id=request.form.get('end_address_id') or None
             )
             db.session.add(route)
             db.session.flush()
+            
+            # Adicionar ponto de partida fixo (se existir)
+            if route.start_address_id:
+                start_wp = RouteWaypoint(
+                    route_id=route.id,
+                    order_id=None,
+                    address_id=route.start_address_id,
+                    sequence_order=1,
+                    status='pending',
+                    notes='Ponto de partida (carga)'
+                )
+                db.session.add(start_wp)
             
             # Adicionar pedidos selecionados
             waypoints_order = request.form.get('waypoints_order', '')
             if waypoints_order:
                 order_ids = waypoints_order.split(',')
-                for seq, order_id in enumerate(order_ids, 1):
+                start_seq = 2 if route.start_address_id else 1
+                for seq, order_id in enumerate(order_ids, start_seq):
                     if order_id:
                         order = Order.query.get(order_id)
                         if order and order.address_id:
@@ -176,6 +187,19 @@ def new():
                             db.session.add(waypoint)
                             order.status = 'confirmed'
             
+            # Adicionar ponto de retorno fixo (se existir)
+            if route.end_address_id:
+                end_seq = len(route.waypoints) + 1
+                end_wp = RouteWaypoint(
+                    route_id=route.id,
+                    order_id=None,
+                    address_id=route.end_address_id,
+                    sequence_order=end_seq,
+                    status='pending',
+                    notes='Ponto de retorno (descarga)'
+                )
+                db.session.add(end_wp)
+            
             db.session.commit()
             flash('Rota criada com sucesso!', 'success')
             return redirect(url_for('routes.list'))
@@ -187,7 +211,8 @@ def new():
                          vehicles=vehicles, 
                          orders=orders,
                          waypoints=waypoints,
-                         route=None)
+                         route=None,
+                         available_addresses=available_addresses)
 
 @routes_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
@@ -196,7 +221,12 @@ def edit(id):
     drivers = Driver.query.filter_by(status='active').all()
     vehicles = Vehicle.query.filter_by(status='available').all()
     
-    # Pedidos disponíveis: NÃO estão em nenhuma rota OU estão nesta rota
+    # Buscar endereços disponíveis para pontos fixos
+    available_addresses = Address.query.filter_by(is_delivery_point=True).all()
+    
+    # Pedidos disponíveis:
+    # 1. Pedidos pendentes/confirmados que NÃO estão em nenhuma rota
+    # 2. Pedidos que já estão nesta rota (para poder ver/adicionar mais)
     orders = Order.query.filter(
         Order.status.in_(['pending', 'confirmed']),
         (~Order.route_waypoints.any()) | 
@@ -213,8 +243,7 @@ def edit(id):
             for seq, order_id in enumerate(order_ids, current_seq + 1):
                 if order_id:
                     order = Order.query.get(order_id)
-                    
-                    # VERIFICAR se o pedido já está noutra rota diferente desta
+                    # Verificar se pedido já está noutra rota
                     existing = RouteWaypoint.query.filter(
                         RouteWaypoint.order_id == order.id,
                         RouteWaypoint.route_id != route.id
@@ -222,7 +251,6 @@ def edit(id):
                     if existing:
                         flash(f'⚠️ Pedido #{order.order_number} já está na rota {existing.route.route_number}', 'warning')
                         continue
-                    
                     if order and order.address_id:
                         waypoint = RouteWaypoint(
                             route_id=route.id,
@@ -235,7 +263,7 @@ def edit(id):
                         order.status = 'confirmed'
             db.session.commit()
             return redirect(url_for('routes.edit', id=id))
-                
+        
         # Remover waypoint
         elif action == 'remove':
             order_id = request.form.get('remove_waypoint')
@@ -254,15 +282,14 @@ def edit(id):
         
         # Otimizar
         elif action == 'optimize':
-            route = Route.query.get(id)
-            # Filtrar apenas waypoints com pedido
+            # Filtrar apenas waypoints com pedido (ignorar pontos fixos)
             deliveries = [wp for wp in route.waypoints if wp.order_id]
             # Ordenar por prioridade e cidade
             deliveries.sort(key=lambda w: (
                 0 if w.order.priority == 'urgent' else 1 if w.order.priority == 'high' else 2,
                 w.address.city if w.address else ''
             ))
-            # Manter início/fim
+            # Manter pontos fixos (início/fim)
             new_sequence = []
             for wp in route.waypoints:
                 if not wp.order_id:
@@ -289,6 +316,60 @@ def edit(id):
             route.vehicle_id = request.form.get('vehicle_id')
             route.route_date = datetime.strptime(request.form.get('route_date'), '%Y-%m-%d').date()
             route.notes = request.form.get('notes')
+            
+            # Atualizar pontos fixos
+            new_start_id = request.form.get('start_address_id') or None
+            new_end_id = request.form.get('end_address_id') or None
+            
+            # Se os pontos fixos mudaram, recriar waypoints fixos
+            if route.start_address_id != new_start_id or route.end_address_id != new_end_id:
+                # Remover waypoints fixos antigos
+                for wp in route.waypoints:
+                    if not wp.order_id:
+                        db.session.delete(wp)
+                
+                route.start_address_id = new_start_id
+                route.end_address_id = new_end_id
+                db.session.flush()
+                
+                # Recriar pontos fixos na ordem correta
+                new_sequence = []
+                if route.start_address_id:
+                    start_wp = RouteWaypoint(
+                        route_id=route.id,
+                        order_id=None,
+                        address_id=route.start_address_id,
+                        sequence_order=1,
+                        status='pending',
+                        notes='Ponto de partida'
+                    )
+                    db.session.add(start_wp)
+                    new_sequence.append(start_wp)
+                
+                # Adicionar entregas existentes
+                deliveries = [wp for wp in route.waypoints if wp.order_id]
+                for wp in deliveries:
+                    new_sequence.append(wp)
+                
+                if route.end_address_id and route.end_address_id != route.start_address_id:
+                    end_wp = RouteWaypoint(
+                        route_id=route.id,
+                        order_id=None,
+                        address_id=route.end_address_id,
+                        sequence_order=len(new_sequence) + 1,
+                        status='pending',
+                        notes='Ponto de retorno'
+                    )
+                    db.session.add(end_wp)
+                    new_sequence.append(end_wp)
+                
+                # Reordenar sequência
+                for seq, wp in enumerate(new_sequence, 1):
+                    wp.sequence_order = seq
+            else:
+                route.start_address_id = new_start_id
+                route.end_address_id = new_end_id
+            
             db.session.commit()
             flash('Rota atualizada com sucesso!', 'success')
             return redirect(url_for('routes.list'))
@@ -299,7 +380,8 @@ def edit(id):
                          drivers=drivers, 
                          vehicles=vehicles,
                          orders=orders,
-                         waypoints=waypoints)
+                         waypoints=waypoints,
+                         available_addresses=available_addresses)
 
 @routes_bp.route('/<int:id>/complete', methods=['POST'])
 @login_required
@@ -1126,3 +1208,15 @@ def undo_waypoint(route_id, waypoint_id):
     db.session.commit()
     
     return jsonify({'success': True, 'message': 'Entrega desmarcada!'})
+
+@routes_bp.route('/addresses')
+@login_required
+def get_available_addresses():
+    """Retorna endereços disponíveis para pontos fixos (formato JSON)"""
+    addresses = Address.query.filter_by(is_delivery_point=True).all()
+    return jsonify([{
+        'id': a.id,
+        'street': a.street,
+        'city': a.city,
+        'postal_code': a.postal_code
+    } for a in addresses])
