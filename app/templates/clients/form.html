@@ -48,7 +48,15 @@
                     <div class="row">
                         <div class="col-md-6 mb-3">
                             <label for="nif" class="form-label">NIF</label>
-                            <input type="text" class="form-control" id="nif" name="nif" value="{{ client.nif if client else '' }}" placeholder="123456789">
+                            <input type="text" class="form-control" id="nif" name="nif" 
+                                value="{{ client.nif if client and client.nif else '' }}" 
+                                placeholder="123456789" 
+                                maxlength="9"
+                                pattern="[0-9]{9}"
+                                title="Digite apenas os 9 dígitos do NIF (ex: 123456789)"
+                                oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0,9)">
+                            <div class="form-text">NIF português com 9 dígitos (apenas números)</div>
+                            <div id="nifError" class="text-danger small d-none">NIF deve ter exatamente 9 dígitos</div>
                         </div>
                         <div class="col-md-6 mb-3">
                             <label for="phone" class="form-label">Telefone</label>
@@ -402,5 +410,28 @@
             console.error('❌ Botão "Buscar Morada" não encontrado na página.');
         }
     });
+</script>
+<script>
+// Validação do formulário antes de enviar
+document.querySelector('form').addEventListener('submit', function(e) {
+    const nifInput = document.getElementById('nif');
+    const nifError = document.getElementById('nifError');
+    const nifValue = nifInput.value.trim();
+    
+    // Se tiver conteúdo, validar
+    if (nifValue !== '') {
+        const nifLimpo = nifValue.replace(/[^0-9]/g, '');
+        if (nifLimpo.length !== 9 || !/^\d{9}$/.test(nifLimpo)) {
+            e.preventDefault();
+            nifError.classList.remove('d-none');
+            nifInput.classList.add('is-invalid');
+            return false;
+        }
+    }
+    
+    nifError.classList.add('d-none');
+    nifInput.classList.remove('is-invalid');
+    return true;
+});
 </script>
 {% endblock %}

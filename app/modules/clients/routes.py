@@ -2,8 +2,20 @@ from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required
 from app.models import Client, Address, StopTimeConfig
 from app.extensions import db
+import re
 
 clients_bp = Blueprint('clients', __name__)
+
+
+def validar_nif(nif):
+    """Valida NIF português (9 dígitos, sem espaços ou caracteres especiais)"""
+    if not nif:
+        return None
+    # Remover espaços, pontos, hífens
+    nif_limpo = re.sub(r'[^0-9]', '', str(nif))
+    if len(nif_limpo) == 9 and nif_limpo.isdigit():
+        return nif_limpo
+    return None
 
 @clients_bp.route('/')
 @login_required
@@ -19,21 +31,31 @@ def new():
     stop_time_configs = StopTimeConfig.query.filter_by(is_active=True).all()
     
     if request.method == 'POST':
-        # ==================== CRIAR CLIENTE ====================
+        # Validar NIF
+        nif_raw = request.form.get('nif')
+        nif_validado = validar_nif(nif_raw)
+        
+        if nif_raw and not nif_validado:
+            flash('NIF inválido. Deve conter 9 dígitos.', 'danger')
+            return render_template('clients/form.html', 
+                                 client=None, 
+                                 address=None,
+                                 stop_time_configs=stop_time_configs,
+                                 form_data=request.form)
+        
         client = Client(
             name=request.form.get('name'),
-            nif=request.form.get('nif'),
-            email=request.form.get('email'),
-            phone=request.form.get('phone'),
+            nif=nif_validado,
+            email=request.form.get('email') or None,
+            phone=request.form.get('phone') or None,
             stop_time_config_id=request.form.get('stop_time_config_id') or None,
             custom_stop_time=request.form.get('custom_stop_time') or None,
             average_pallets=request.form.get('average_pallets', 1),
             needs_delivery_ramp=True if request.form.get('needs_delivery_ramp') else False
         )
         db.session.add(client)
-        db.session.flush()  # Para obter o client.id antes de criar o endereço
+        db.session.flush()
         
-        # ==================== CRIAR ENDEREÇO PRINCIPAL ====================
         address = Address(
             client_id=client.id,
             street=request.form.get('street'),
@@ -53,7 +75,10 @@ def new():
         flash('Cliente criado com sucesso', 'success')
         return redirect(url_for('clients.list'))
     
-    return render_template('clients/form.html', client=None, address=None, stop_time_configs=stop_time_configs)
+    return render_template('clients/form.html', 
+                         client=None, 
+                         address=None,
+                         stop_time_configs=stop_time_configs)
 
 
 @clients_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
