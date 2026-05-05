@@ -69,11 +69,15 @@
                             <option value="">Selecione um endereço...</option>
                             {% for addr in available_addresses %}
                             <option value="{{ addr.id }}" {% if route and route.start_address_id == addr.id %}selected{% endif %}>
-                                📍 {{ addr.street }}, {{ addr.city }}
+                                {% if addr.client %}
+                                    {{ addr.client.name }} - {{ addr.street }}, {{ addr.city }}
+                                {% else %}
+                                    📍 {{ addr.street }}, {{ addr.city }}
+                                {% endif %}
                             </option>
                             {% endfor %}
                         </select>
-                        <div class="form-text">Local onde a rota começa (ex: armazém, fábrica)</div>
+                        <div class="form-text">Local onde a rota começa (ex: armém, fábrica)</div>
                     </div>
 
                     <div class="mb-3">
@@ -84,11 +88,15 @@
                             <option value="">Selecione um endereço...</option>
                             {% for addr in available_addresses %}
                             <option value="{{ addr.id }}" {% if route and route.end_address_id == addr.id %}selected{% endif %}>
-                                📍 {{ addr.street }}, {{ addr.city }}
+                                {% if addr.client %}
+                                    {{ addr.client.name }} - {{ addr.street }}, {{ addr.city }}
+                                {% else %}
+                                    📍 {{ addr.street }}, {{ addr.city }}
+                                {% endif %}
                             </option>
                             {% endfor %}
                         </select>
-                        <div class="form-text">Local onde a rota termina (ex: armazém, fábrica)</div>
+                        <div class="form-text">Local onde a rota termina (ex: armém, fábrica)</div>
                     </div>
 
                     <div class="alert alert-info small mb-3">
@@ -333,9 +341,9 @@ document.addEventListener('DOMContentLoaded', function() {
                     ?.closest('tr');
                 
                 if (orderRow) {
-                    const orderNumber = orderRow.querySelector('.fw-bold').textContent;
-                    const clientName = orderRow.cells[2].textContent;
-                    const address = orderRow.cells[3].textContent;
+                    const orderNumber = orderRow.querySelector('.fw-bold').textContent.trim();
+                    const clientName = orderRow.cells[2].textContent.trim();
+                    const address = orderRow.cells[3].querySelector('small')?.textContent.trim() || orderRow.cells[3].textContent.trim();
                     const seq = document.querySelectorAll('[data-order-id]').length + 1;
                     
                     const item = document.createElement('div');
