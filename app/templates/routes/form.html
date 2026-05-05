@@ -60,7 +60,7 @@
             </div>
             <div class="card-body p-4">
                 <form id="routeForm" method="POST">
-                    <!-- PONTOS FIXOS - DENTRO DO FORMULÁRIO -->
+                    <!-- PONTOS FIXOS -->
                     <div class="mb-3">
                         <label for="start_address_id" class="form-label">
                             <i class="bi bi-geo-alt"></i> Ponto de Partida (Carga)
@@ -70,14 +70,14 @@
                             {% for addr in available_addresses %}
                             <option value="{{ addr.id }}" {% if route and route.start_address_id == addr.id %}selected{% endif %}>
                                 {% if addr.client %}
-                                    {{ addr.client.name }} - {{ addr.street }}, {{ addr.city }}
+                                    {{ addr.client.name|trim }} - {{ addr.street }}, {{ addr.city }}
                                 {% else %}
                                     📍 {{ addr.street }}, {{ addr.city }}
                                 {% endif %}
                             </option>
                             {% endfor %}
                         </select>
-                        <div class="form-text">Local onde a rota começa (ex: armém, fábrica)</div>
+                        <div class="form-text">Local onde a rota começa (ex: armazém, fábrica)</div>
                     </div>
 
                     <div class="mb-3">
@@ -89,14 +89,14 @@
                             {% for addr in available_addresses %}
                             <option value="{{ addr.id }}" {% if route and route.end_address_id == addr.id %}selected{% endif %}>
                                 {% if addr.client %}
-                                    {{ addr.client.name }} - {{ addr.street }}, {{ addr.city }}
+                                    {{ addr.client.name|trim }} - {{ addr.street }}, {{ addr.city }}
                                 {% else %}
                                     📍 {{ addr.street }}, {{ addr.city }}
                                 {% endif %}
                             </option>
                             {% endfor %}
                         </select>
-                        <div class="form-text">Local onde a rota termina (ex: armém, fábrica)</div>
+                        <div class="form-text">Local onde a rota termina (ex: armazém, fábrica)</div>
                     </div>
 
                     <div class="alert alert-info small mb-3">
@@ -204,7 +204,8 @@
                             {% for order in orders %}
                             <tr>
                                 <td>
-                                    <input type="checkbox" class="order-checkbox" value="{{ order.id }}">
+                                    <input type="checkbox" class="order-checkbox" value="{{ order.id }}" 
+                                    {% if route and order.id in route.waypoints|map(attribute='order_id')|list %}disabled checked{% endif %}>
                                 </td>
                                 <td>
                                     <span class="fw-bold">#{{ order.order_number }}</span>
@@ -221,9 +222,7 @@
                                     </small>
                                 </td>
                                 <td>
-                                    {% if order.priority == 'urgent' %}
-                                        <span class="badge bg-danger">Urgente</span>
-                                    {% elif order.priority == 'high' %}
+                                    {% if order.priority == 'urgent' or order.priority == 'high' %}
                                         <span class="badge bg-warning">Alta</span>
                                     {% else %}
                                         <span class="badge bg-secondary">Normal</span>
@@ -313,119 +312,126 @@ document.addEventListener('DOMContentLoaded', function() {
     const routeForm = document.getElementById('routeForm');
     const waypointsOrderInput = document.getElementById('waypoints_order');
 
+    let sortable;
+
+    function initSortable() {
+        if (sortable) sortable.destroy();
+        sortable = Sortable.create(sortableList, {
+            animation: 150,
+            ghostClass: 'bg-light',
+            filter: '.start-point, .end-point',
+            onEnd: function() {
+                updateSequence();
+            }
+        });
+    }
+
+    // Inicializa a contagem e eventos
+    updateUI();
+    initSortable();
+
     // Select All functionality
     selectAllCheckbox.addEventListener('change', function() {
         orderCheckboxes.forEach(checkbox => {
-            checkbox.checked = this.checked;
+            if (!checkbox.disabled) {
+                checkbox.checked = this.checked;
+                toggleOrderInList(checkbox);
+            }
         });
-        updateSelectedOrders();
+        updateUI();
     });
 
     // Individual checkbox change
     orderCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', updateSelectedOrders);
+        checkbox.addEventListener('change', function() {
+            toggleOrderInList(this);
+            updateUI();
+        });
     });
 
-    function updateSelectedOrders() {
-        const selected = Array.from(orderCheckboxes)
-            .filter(cb => cb.checked)
-            .map(cb => cb.value);
-        
-        selectedCount.textContent = selected.length;
-        
-        // Adicionar à lista sortable
-        selected.forEach(orderId => {
-            if (!document.querySelector(`[data-order-id="${orderId}"]`)) {
-                const orderRow = Array.from(document.querySelectorAll('.order-checkbox'))
-                    .find(cb => cb.value === orderId)
-                    ?.closest('tr');
-                
-                if (orderRow) {
-                    const orderNumber = orderRow.querySelector('.fw-bold').textContent.trim();
-                    const clientName = orderRow.cells[2].textContent.trim();
-                    const address = orderRow.cells[3].querySelector('small')?.textContent.trim() || orderRow.cells[3].textContent.trim();
-                    const seq = document.querySelectorAll('[data-order-id]').length + 1;
-                    
-                    const item = document.createElement('div');
-                    item.className = 'list-group-item sortable-item client-card';
-                    item.setAttribute('data-order-id', orderId);
-                    item.innerHTML = `
-                        <div class="d-flex align-items-center">
-                            <span class="sortable-handle">
-                                <i class="bi bi-grip-vertical"></i>
-                            </span>
-                            <span class="sequence-badge">${seq}</span>
-                            <div class="flex-grow-1">
-                                <strong>${orderNumber}</strong> - ${clientName}
-                                <br>
-                                <small class="text-muted">${address}</small>
-                            </div>
-                            <button type="button" class="btn btn-sm btn-outline-danger remove-order" data-order-id="${orderId}">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                        </div>
-                    `;
-                    
-                    sortableList.appendChild(item);
-                    item.querySelector('.remove-order').addEventListener('click', function() {
-                        removeOrder(orderId);
-                    });
-                }
+    function toggleOrderInList(checkbox) {
+        const orderId = checkbox.value;
+        const exists = document.querySelector(`[data-order-id="${orderId}"]`);
+
+        if (checkbox.checked && !exists) {
+            const orderRow = checkbox.closest('tr');
+            const orderNumber = orderRow.querySelector('.fw-bold').textContent.trim();
+            const clientName = orderRow.cells[2].textContent.trim();
+            const address = orderRow.cells[3].querySelector('small')?.textContent.trim() || orderRow.cells[3].textContent.trim();
+            
+            const item = document.createElement('div');
+            item.className = 'list-group-item sortable-item client-card';
+            item.setAttribute('data-order-id', orderId);
+            item.innerHTML = `
+                <div class="d-flex align-items-center">
+                    <span class="sortable-handle">
+                        <i class="bi bi-grip-vertical"></i>
+                    </span>
+                    <span class="sequence-badge">0</span>
+                    <div class="flex-grow-1">
+                        <strong>${orderNumber}</strong> - ${clientName}
+                        <br>
+                        <small class="text-muted">${address}</small>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline-danger remove-order" data-order-id="${orderId}">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </div>
+            `;
+            
+            // Adicionar antes do ponto de retorno, se houver
+            const endPoint = sortableList.querySelector('.end-point');
+            if (endPoint) {
+                sortableList.insertBefore(item, endPoint);
+            } else {
+                sortableList.appendChild(item);
             }
-        });
-        
-        // Remover da lista sortable se desmarcado
-        document.querySelectorAll('[data-order-id]').forEach(item => {
-            const orderId = item.getAttribute('data-order-id');
-            if (!selected.includes(orderId)) {
-                item.remove();
-            }
-        });
-        
-        updateSequence();
-        emptyState.style.display = document.querySelectorAll('[data-order-id]').length === 0 ? 'block' : 'none';
+
+            item.querySelector('.remove-order').addEventListener('click', function() {
+                removeOrder(orderId);
+            });
+        } else if (!checkbox.checked && exists) {
+            exists.remove();
+        }
     }
 
     function removeOrder(orderId) {
         const checkbox = document.querySelector(`.order-checkbox[value="${orderId}"]`);
         if (checkbox) {
             checkbox.checked = false;
-            updateSelectedOrders();
         }
+        const item = document.querySelector(`[data-order-id="${orderId}"]`);
+        if (item) item.remove();
+        updateUI();
     }
 
     function updateSequence() {
         let seq = 1;
-        document.querySelectorAll('[data-order-id]').forEach(item => {
-            item.querySelector('.sequence-badge').textContent = seq++;
+        sortableList.querySelectorAll('.list-group-item').forEach(item => {
+            const badge = item.querySelector('.sequence-badge');
+            if (badge) badge.textContent = seq++;
         });
     }
 
-    // Sortable.js
-    Sortable.create(sortableList, {
-        animation: 150,
-        ghostClass: 'bg-light',
-        filter: '.start-point, .end-point',
-        onEnd: function(evt) {
-            updateSequence();
-        }
-    });
+    function updateUI() {
+        const totalItems = sortableList.querySelectorAll('[data-order-id]').length;
+        selectedCount.textContent = totalItems;
+        emptyState.style.display = totalItems === 0 && !sortableList.querySelector('.start-point, .end-point') ? 'block' : 'none';
+        updateSequence();
+    }
 
-    // Form submission
-    routeForm.addEventListener('submit', function(e) {
-        // Pegar TODOS os pedidos (order-id), excluindo pontos fixos
-        const orderIds = Array.from(document.querySelectorAll('[data-order-id]'))
-            .map(item => item.getAttribute('data-order-id'))
-            .filter(id => id); // Garantir que não está vazio
-        waypointsOrderInput.value = orderIds.join(',');
-        console.log('Pedidos enviados:', waypointsOrderInput.value);
-    });
-
-    // Remove button click
+    // Attach remove events to existing items (for edit mode)
     document.querySelectorAll('.remove-order').forEach(btn => {
         btn.addEventListener('click', function() {
             removeOrder(this.getAttribute('data-order-id'));
         });
+    });
+
+    // Form submission
+    routeForm.addEventListener('submit', function(e) {
+        const orderIds = Array.from(sortableList.querySelectorAll('[data-order-id]'))
+            .map(item => item.getAttribute('data-order-id'));
+        waypointsOrderInput.value = orderIds.join(',');
     });
 });
 </script>
