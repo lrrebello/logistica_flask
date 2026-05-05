@@ -6,45 +6,17 @@
 
 {% block extra_css %}
 <style>
-    .sortable-item {
-        cursor: move;
-        transition: all 0.2s;
-    }
-    .sortable-item:hover {
-        background-color: #f8f9fa;
-        transform: scale(1.01);
-    }
-    .sortable-handle {
-        cursor: grab;
-        margin-right: 10px;
-        color: #6c757d;
-    }
-    .sortable-handle:active {
-        cursor: grabbing;
-    }
+    .sortable-item { cursor: move; transition: all 0.2s; }
+    .sortable-item:hover { background-color: #f8f9fa; transform: scale(1.01); }
+    .sortable-handle { cursor: grab; margin-right: 10px; color: #6c757d; }
     .sequence-badge {
-        background-color: #667eea;
-        color: white;
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        margin-right: 10px;
-        font-weight: bold;
+        background-color: #667eea; color: white; border-radius: 50%;
+        width: 30px; height: 30px; display: inline-flex;
+        align-items: center; justify-content: center; margin-right: 10px; font-weight: bold;
     }
-    .client-card {
-        border-left: 3px solid #667eea;
-    }
-    .start-point {
-        background-color: #e8f5e9;
-        border-left: 3px solid #4caf50 !important;
-    }
-    .end-point {
-        background-color: #fce4ec;
-        border-left: 3px solid #e91e63 !important;
-    }
+    .client-card { border-left: 3px solid #667eea; }
+    .start-point { background-color: #e8f5e9; border-left: 3px solid #4caf50 !important; }
+    .end-point { background-color: #fce4ec; border-left: 3px solid #e91e63 !important; }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@latest/css/sortable.min.css">
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
@@ -52,250 +24,124 @@
 
 {% block content %}
 <div class="row">
-    <!-- Configurações da Rota -->
     <div class="col-md-4">
         <div class="card mb-4">
-            <div class="card-header bg-white py-3">
-                <h5 class="mb-0">Configurações da Rota</h5>
-            </div>
+            <div class="card-header bg-white py-3"><h5 class="mb-0">Configurações da Rota</h5></div>
             <div class="card-body p-4">
                 <form id="routeForm" method="POST">
-                    <!-- PONTOS FIXOS -->
                     <div class="mb-3">
-                        <label for="start_address_id" class="form-label">
-                            <i class="bi bi-geo-alt"></i> Ponto de Partida (Carga)
-                        </label>
-                        <select class="form-select" id="start_address_id" name="start_address_id">
-                            <option value="">Selecione um endereço...</option>
+                        <label class="form-label">Ponto de Partida</label>
+                        <select class="form-select" name="start_address_id" id="start_address_id">
+                            <option value="">Selecione...</option>
                             {% for addr in available_addresses %}
                             <option value="{{ addr.id }}" {% if route and route.start_address_id == addr.id %}selected{% endif %}>
-                                {% if addr.client %}
-                                    {{ addr.client.name|trim }} - {{ addr.street }}, {{ addr.city }}
-                                {% else %}
-                                    📍 {{ addr.street }}, {{ addr.city }}
-                                {% endif %}
+                                {{ addr.client.name if addr.client else '📍 ' + addr.street }}
                             </option>
                             {% endfor %}
                         </select>
-                        <div class="form-text">Local onde a rota começa (ex: armazém, fábrica)</div>
                     </div>
-
                     <div class="mb-3">
-                        <label for="end_address_id" class="form-label">
-                            <i class="bi bi-geo-alt-fill"></i> Ponto de Retorno (Descarga)
-                        </label>
-                        <select class="form-select" id="end_address_id" name="end_address_id">
-                            <option value="">Selecione um endereço...</option>
+                        <label class="form-label">Ponto de Retorno</label>
+                        <select class="form-select" name="end_address_id" id="end_address_id">
+                            <option value="">Selecione...</option>
                             {% for addr in available_addresses %}
                             <option value="{{ addr.id }}" {% if route and route.end_address_id == addr.id %}selected{% endif %}>
-                                {% if addr.client %}
-                                    {{ addr.client.name|trim }} - {{ addr.street }}, {{ addr.city }}
-                                {% else %}
-                                    📍 {{ addr.street }}, {{ addr.city }}
-                                {% endif %}
+                                {{ addr.client.name if addr.client else '📍 ' + addr.street }}
                             </option>
                             {% endfor %}
                         </select>
-                        <div class="form-text">Local onde a rota termina (ex: armazém, fábrica)</div>
                     </div>
-
-                    <div class="alert alert-info small mb-3">
-                        <i class="bi bi-info-circle"></i> 
-                        <strong>Dica:</strong> Se não selecionar pontos fixos, o sistema usará a localização do primeiro e último pedido.
-                    </div>
-
-                    <!-- OUTROS CAMPOS DO FORMULÁRIO -->
                     <div class="mb-3">
-                        <label for="route_number" class="form-label">Número da Rota *</label>
-                        <input type="text" class="form-control" id="route_number" name="route_number" 
-                               value="{{ route.route_number if route else '' }}" required 
-                               placeholder="Ex: 280">
+                        <label class="form-label">Número da Rota *</label>
+                        <input type="text" class="form-control" name="route_number" value="{{ route.route_number if route else '' }}" required>
                     </div>
-                    
                     <div class="mb-3">
-                        <label for="route_name" class="form-label">Nome da Rota</label>
-                        <input type="text" class="form-control" id="route_name" name="route_name" 
-                               value="{{ route.route_name if route else '' }}" 
-                               placeholder="Ex: Rota do Algarve">
+                        <label class="form-label">Nome da Rota</label>
+                        <input type="text" class="form-control" name="route_name" value="{{ route.route_name if route else '' }}">
                     </div>
-                    
                     <div class="mb-3">
-                        <label for="region" class="form-label">Região</label>
-                        <select class="form-select" id="region" name="region">
-                            <option value="">Selecione...</option>
-                            <option value="Algarve" {% if route and route.region == 'Algarve' %}selected{% endif %}>Algarve</option>
-                            <option value="Alentejo" {% if route and route.region == 'Alentejo' %}selected{% endif %}>Alentejo</option>
-                            <option value="Lisboa" {% if route and route.region == 'Lisboa' %}selected{% endif %}>Lisboa</option>
-                            <option value="Centro" {% if route and route.region == 'Centro' %}selected{% endif %}>Centro</option>
-                            <option value="Norte" {% if route and route.region == 'Norte' %}selected{% endif %}>Norte</option>
-                        </select>
+                        <label class="form-label">Data</label>
+                        <input type="date" class="form-control" name="route_date" value="{{ route.route_date.strftime('%Y-%m-%d') if route and route.route_date else '' }}" required>
                     </div>
-                    
                     <div class="mb-3">
-                        <label for="route_date" class="form-label">Data da Rota</label>
-                        <input type="date" class="form-control" id="route_date" name="route_date" 
-                               value="{{ route.route_date.strftime('%Y-%m-%d') if route and route.route_date else '' }}" required>
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label for="driver_id" class="form-label">Motorista</label>
-                        <select class="form-select" id="driver_id" name="driver_id" required>
+                        <label class="form-label">Motorista</label>
+                        <select class="form-select" name="driver_id" required>
                             <option value="">Selecione...</option>
                             {% for driver in drivers %}
-                            <option value="{{ driver.id }}" {% if route and route.driver_id == driver.id %}selected{% endif %}>
-                                {{ driver.name }}
-                            </option>
+                            <option value="{{ driver.id }}" {% if route and route.driver_id == driver.id %}selected{% endif %}>{{ driver.name }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    
                     <div class="mb-3">
-                        <label for="vehicle_id" class="form-label">Veículo</label>
-                        <select class="form-select" id="vehicle_id" name="vehicle_id" required>
+                        <label class="form-label">Veículo</label>
+                        <select class="form-select" name="vehicle_id" required>
                             <option value="">Selecione...</option>
                             {% for vehicle in vehicles %}
-                            <option value="{{ vehicle.id }}" {% if route and route.vehicle_id == vehicle.id %}selected{% endif %}>
-                                {{ vehicle.brand }} {{ vehicle.model }} ({{ vehicle.plate }})
-                            </option>
+                            <option value="{{ vehicle.id }}" {% if route and route.vehicle_id == vehicle.id %}selected{% endif %}>{{ vehicle.plate }}</option>
                             {% endfor %}
                         </select>
                     </div>
-                    
-                    <div class="mb-3">
-                        <label for="notes" class="form-label">Observações</label>
-                        <textarea class="form-control" id="notes" name="notes" rows="3">{{ route.notes if route else '' }}</textarea>
-                    </div>
-                    
                     <input type="hidden" id="waypoints_order" name="waypoints_order" value="">
-                    
                     <div class="d-grid gap-2 mt-4">
-                        <button type="submit" class="btn btn-primary btn-lg">
-                            <i class="bi bi-save"></i> {{ 'Atualizar' if route else 'Criar' }} Rota
-                        </button>
-                        <a href="{{ url_for('routes.list') }}" class="btn btn-light">Cancelar</a>
+                        <button type="submit" class="btn btn-primary btn-lg">Salvar Rota</button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 
-    <!-- Seleção e Ordenação de Pedidos -->
     <div class="col-md-8">
-        <!-- Pedidos disponíveis para adicionar -->
         <div class="card mb-4">
-            <div class="card-header bg-white py-3">
-                <h5 class="mb-0">Pedidos Pendentes ({{ orders|length }})</h5>
-            </div>
+            <div class="card-header bg-white py-3"><h5>Pedidos Disponíveis</h5></div>
             <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-hover align-middle mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th style="width: 40px;">
-                                    <input type="checkbox" id="selectAll">
-                                </th>
-                                <th>Pedido</th>
-                                <th>Cliente</th>
-                                <th>Endereço</th>
-                                <th>Prioridade</th>
-                             </tr>
-                        </thead>
-                        <tbody>
-                            {% for order in orders %}
-                            <tr>
-                                <td>
-                                    <input type="checkbox" class="order-checkbox" value="{{ order.id }}" 
-                                    {% if route and order.id in route.waypoints|map(attribute='order_id')|list %}disabled checked{% endif %}>
-                                </td>
-                                <td>
-                                    <span class="fw-bold">#{{ order.order_number }}</span>
-                                    <small class="text-muted d-block">{{ order.created_at.strftime('%d/%m/%Y') }}</small>
-                                </td>
-                                <td>{{ order.client.name }}</td>
-                                <td>
-                                    <small>
-                                        {% if order.address %}
-                                            {{ order.address.street }}, {{ order.address.city }}
-                                        {% else %}
-                                            <span class="text-muted">Sem endereço</span>
-                                        {% endif %}
-                                    </small>
-                                </td>
-                                <td>
-                                    {% if order.priority == 'urgent' or order.priority == 'high' %}
-                                        <span class="badge bg-warning">Alta</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">Normal</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% else %}
-                            <tr>
-                                <td colspan="5" class="text-center py-5 text-muted">
-                                    <i class="bi bi-inbox"></i> Nenhum pedido pendente disponível
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+                <table class="table table-hover mb-0">
+                    <thead><tr><th>#</th><th>Pedido</th><th>Cliente</th><th>Ação</th></tr></thead>
+                    <tbody>
+                        {% for order in orders %}
+                        {% set is_in = route and order.id in route.waypoints|map(attribute='order_id')|list %}
+                        <tr id="row-{{ order.id }}" class="{% if is_in %}table-light text-muted{% endif %}">
+                            <td><input type="checkbox" class="order-checkbox" value="{{ order.id }}" {% if is_in %}checked disabled{% endif %}></td>
+                            <td><strong>#{{ order.order_number }}</strong></td>
+                            <td>{{ order.client.name }}</td>
+                            <td>
+                                <button type="button" class="btn btn-sm btn-primary add-btn" data-id="{{ order.id }}" {% if is_in %}disabled{% endif %}>
+                                    Adicionar
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
 
-        <!-- Pedidos selecionados para a rota (Sortable) -->
         <div class="card">
             <div class="card-header bg-white py-3">
-                <h5 class="mb-0">
-                    <i class="bi bi-list-check"></i> Pedidos da Rota 
-                    <span class="badge bg-primary ms-2" id="selectedCount">0</span>
-                </h5>
+                <h5>Pedidos na Rota <span class="badge bg-primary" id="selectedCount">0</span></h5>
             </div>
             <div class="card-body p-0">
                 <div id="sortableList" class="list-group list-group-flush">
                     {% if route and route.waypoints %}
-                        {% for waypoint in route.waypoints %}
-                            {% if waypoint.order %}
-                            <div class="list-group-item sortable-item client-card" data-order-id="{{ waypoint.order.id }}">
+                        {% for wp in route.waypoints %}
+                            {% if wp.order %}
+                            <div class="list-group-item sortable-item client-card" data-order-id="{{ wp.order.id }}">
                                 <div class="d-flex align-items-center">
-                                    <span class="sortable-handle">
-                                        <i class="bi bi-grip-vertical"></i>
-                                    </span>
-                                    <span class="sequence-badge">{{ waypoint.sequence_order }}</span>
-                                    <div class="flex-grow-1">
-                                        <strong>#{{ waypoint.order.order_number }}</strong> - {{ waypoint.order.client.name }}
-                                        <br>
-                                        <small class="text-muted">{{ waypoint.address.street if waypoint.address else 'Sem endereço' }}, {{ waypoint.address.city if waypoint.address else '' }}</small>
-                                    </div>
-                                    <button type="button" class="btn btn-sm btn-outline-danger remove-order" data-order-id="{{ waypoint.order.id }}">
-                                        <i class="bi bi-trash"></i>
-                                    </button>
+                                    <span class="sortable-handle"><i class="bi bi-grip-vertical"></i></span>
+                                    <span class="sequence-badge">0</span>
+                                    <div class="flex-grow-1"><strong>#{{ wp.order.order_number }}</strong> - {{ wp.order.client.name }}</div>
+                                    <button type="button" class="btn btn-sm btn-danger remove-order" data-id="{{ wp.order.id }}">Remover</button>
                                 </div>
                             </div>
-                            {% elif not waypoint.order_id %}
-                            <!-- Pontos fixos (início/fim) -->
-                            <div class="list-group-item {% if waypoint.notes and 'partida' in waypoint.notes.lower() %}start-point{% else %}end-point{% endif %}">
+                            {% else %}
+                            <div class="list-group-item {% if wp.notes and 'partida' in wp.notes.lower() %}start-point{% else %}end-point{% endif %}">
                                 <div class="d-flex align-items-center">
-                                    <span class="sequence-badge">{{ waypoint.sequence_order }}</span>
-                                    <div class="flex-grow-1">
-                                        <strong>
-                                            {% if waypoint.notes and 'partida' in waypoint.notes.lower() %}
-                                                <i class="bi bi-play-circle"></i> Ponto de Partida
-                                            {% else %}
-                                                <i class="bi bi-stop-circle"></i> Ponto de Retorno
-                                            {% endif %}
-                                        </strong>
-                                        <br>
-                                        <small class="text-muted">{{ waypoint.address.street if waypoint.address else 'Sem endereço' }}, {{ waypoint.address.city if waypoint.address else '' }}</small>
-                                    </div>
+                                    <span class="sequence-badge">0</span>
+                                    <div class="flex-grow-1"><strong>{{ wp.notes }}</strong></div>
                                 </div>
                             </div>
                             {% endif %}
                         {% endfor %}
                     {% endif %}
-                </div>
-                <div id="emptyState" class="text-center py-5 text-muted" style="display: {% if route and route.waypoints|length > 0 %}none{% else %}block{% endif %};">
-                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
-                    <p class="mt-2">Selecione pedidos acima para adicionar à rota</p>
                 </div>
             </div>
         </div>
@@ -304,135 +150,83 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    const selectAllCheckbox = document.getElementById('selectAll');
-    const orderCheckboxes = document.querySelectorAll('.order-checkbox');
-    const selectedCount = document.getElementById('selectedCount');
-    const sortableList = document.getElementById('sortableList');
-    const emptyState = document.getElementById('emptyState');
-    const routeForm = document.getElementById('routeForm');
-    const waypointsOrderInput = document.getElementById('waypoints_order');
-
-    let sortable;
-
-    function initSortable() {
-        if (sortable) sortable.destroy();
-        sortable = Sortable.create(sortableList, {
-            animation: 150,
-            ghostClass: 'bg-light',
-            filter: '.start-point, .end-point',
-            onEnd: function() {
-                updateSequence();
-            }
-        });
-    }
-
-    // Inicializa a contagem e eventos
-    updateUI();
-    initSortable();
-
-    // Select All functionality
-    selectAllCheckbox.addEventListener('change', function() {
-        orderCheckboxes.forEach(checkbox => {
-            if (!checkbox.disabled) {
-                checkbox.checked = this.checked;
-                toggleOrderInList(checkbox);
-            }
-        });
-        updateUI();
-    });
-
-    // Individual checkbox change
-    orderCheckboxes.forEach(checkbox => {
-        checkbox.addEventListener('change', function() {
-            toggleOrderInList(this);
-            updateUI();
-        });
-    });
-
-    function toggleOrderInList(checkbox) {
-        const orderId = checkbox.value;
-        const exists = document.querySelector(`[data-order-id="${orderId}"]`);
-
-        if (checkbox.checked && !exists) {
-            const orderRow = checkbox.closest('tr');
-            const orderNumber = orderRow.querySelector('.fw-bold').textContent.trim();
-            const clientName = orderRow.cells[2].textContent.trim();
-            const address = orderRow.cells[3].querySelector('small')?.textContent.trim() || orderRow.cells[3].textContent.trim();
-            
-            const item = document.createElement('div');
-            item.className = 'list-group-item sortable-item client-card';
-            item.setAttribute('data-order-id', orderId);
-            item.innerHTML = `
-                <div class="d-flex align-items-center">
-                    <span class="sortable-handle">
-                        <i class="bi bi-grip-vertical"></i>
-                    </span>
-                    <span class="sequence-badge">0</span>
-                    <div class="flex-grow-1">
-                        <strong>${orderNumber}</strong> - ${clientName}
-                        <br>
-                        <small class="text-muted">${address}</small>
-                    </div>
-                    <button type="button" class="btn btn-sm btn-outline-danger remove-order" data-order-id="${orderId}">
-                        <i class="bi bi-trash"></i>
-                    </button>
-                </div>
-            `;
-            
-            // Adicionar antes do ponto de retorno, se houver
-            const endPoint = sortableList.querySelector('.end-point');
-            if (endPoint) {
-                sortableList.insertBefore(item, endPoint);
-            } else {
-                sortableList.appendChild(item);
-            }
-
-            item.querySelector('.remove-order').addEventListener('click', function() {
-                removeOrder(orderId);
-            });
-        } else if (!checkbox.checked && exists) {
-            exists.remove();
-        }
-    }
-
-    function removeOrder(orderId) {
-        const checkbox = document.querySelector(`.order-checkbox[value="${orderId}"]`);
-        if (checkbox) {
-            checkbox.checked = false;
-        }
-        const item = document.querySelector(`[data-order-id="${orderId}"]`);
-        if (item) item.remove();
-        updateUI();
-    }
-
-    function updateSequence() {
-        let seq = 1;
-        sortableList.querySelectorAll('.list-group-item').forEach(item => {
-            const badge = item.querySelector('.sequence-badge');
-            if (badge) badge.textContent = seq++;
-        });
-    }
+    const list = document.getElementById('sortableList');
+    const count = document.getElementById('selectedCount');
+    const input = document.getElementById('waypoints_order');
 
     function updateUI() {
-        const totalItems = sortableList.querySelectorAll('[data-order-id]').length;
-        selectedCount.textContent = totalItems;
-        emptyState.style.display = totalItems === 0 && !sortableList.querySelector('.start-point, .end-point') ? 'block' : 'none';
-        updateSequence();
+        let seq = 1;
+        list.querySelectorAll('.list-group-item').forEach(item => {
+            item.querySelector('.sequence-badge').textContent = seq++;
+        });
+        const orders = list.querySelectorAll('[data-order-id]');
+        count.textContent = orders.length;
+        input.value = Array.from(orders).map(i => i.dataset.orderId).join(',');
     }
 
-    // Attach remove events to existing items (for edit mode)
-    document.querySelectorAll('.remove-order').forEach(btn => {
-        btn.addEventListener('click', function() {
-            removeOrder(this.getAttribute('data-order-id'));
-        });
+    Sortable.create(list, {
+        animation: 150, handle: '.sortable-handle',
+        filter: '.start-point, .end-point',
+        onEnd: updateUI
     });
 
-    // Form submission
-    routeForm.addEventListener('submit', function(e) {
-        const orderIds = Array.from(sortableList.querySelectorAll('[data-order-id]'))
-            .map(item => item.getAttribute('data-order-id'));
-        waypointsOrderInput.value = orderIds.join(',');
+    function addOrder(id) {
+        if (list.querySelector(`[data-order-id="${id}"]`)) return;
+        
+        const row = document.getElementById(`row-${id}`);
+        const num = row.querySelector('strong').textContent;
+        const client = row.cells[2].textContent;
+
+        const item = document.createElement('div');
+        item.className = 'list-group-item sortable-item client-card';
+        item.setAttribute('data-order-id', id);
+        item.innerHTML = `
+            <div class="d-flex align-items-center">
+                <span class="sortable-handle"><i class="bi bi-grip-vertical"></i></span>
+                <span class="sequence-badge">0</span>
+                <div class="flex-grow-1"><strong>${num}</strong> - ${client}</div>
+                <button type="button" class="btn btn-sm btn-danger remove-order" data-id="${id}">Remover</button>
+            </div>`;
+        
+        const end = list.querySelector('.end-point');
+        if (end) list.insertBefore(item, end); else list.appendChild(item);
+        
+        item.querySelector('.remove-order').onclick = () => removeOrder(id);
+        
+        row.classList.add('table-light', 'text-muted');
+        row.querySelector('.order-checkbox').checked = true;
+        row.querySelector('.order-checkbox').disabled = true;
+        row.querySelector('.add-btn').disabled = true;
+        updateUI();
+    }
+
+    function removeOrder(id) {
+        const item = list.querySelector(`[data-order-id="${id}"]`);
+        if (item) item.remove();
+        
+        const row = document.getElementById(`row-${id}`);
+        if (row) {
+            row.classList.remove('table-light', 'text-muted');
+            row.querySelector('.order-checkbox').checked = false;
+            row.querySelector('.order-checkbox').disabled = false;
+            row.querySelector('.add-btn').disabled = false;
+        }
+        updateUI();
+    }
+
+    document.querySelectorAll('.add-btn').forEach(btn => {
+        btn.onclick = function() { addOrder(this.dataset.id); };
     });
+
+    document.querySelectorAll('.order-checkbox').forEach(cb => {
+        cb.onchange = function() { if (this.checked) addOrder(this.value); };
+    });
+
+    document.querySelectorAll('.remove-order').forEach(btn => {
+        btn.onclick = function() { removeOrder(this.dataset.id); };
+    });
+
+    updateUI();
 });
 </script>
 {% endblock %}
