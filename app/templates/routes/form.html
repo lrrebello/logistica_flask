@@ -32,9 +32,18 @@
         align-items: center;
         justify-content: center;
         margin-right: 10px;
+        font-weight: bold;
     }
     .client-card {
         border-left: 3px solid #667eea;
+    }
+    .start-point {
+        background-color: #e8f5e9;
+        border-left: 3px solid #4caf50 !important;
+    }
+    .end-point {
+        background-color: #fce4ec;
+        border-left: 3px solid #e91e63 !important;
     }
 </style>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sortablejs@latest/css/sortable.min.css">
@@ -44,44 +53,6 @@
 {% block content %}
 <div class="row">
     <!-- Configurações da Rota -->
-     <!-- Configuração de pontos fixos -->
-        <div class="card mb-4">
-            <div class="card-header bg-white py-3">
-                <h5 class="mb-0"><i class="bi bi-geo-alt"></i> Pontos de Partida e Retorno</h5>
-            </div>
-            <div class="card-body p-4">
-                <div class="row">
-                    <div class="col-md-6 mb-3">
-                        <label for="start_address" class="form-label">Ponto de Partida (Carga)</label>
-                        <select class="form-select" id="start_address_id" name="start_address_id">
-                            <option value="">Selecione um endereço...</option>
-                            {% for addr in available_addresses %}
-                            <option value="{{ addr.id }}" {% if route and route.start_address_id == addr.id %}selected{% endif %}>
-                                {{ addr.street }}, {{ addr.city }} - {{ addr.postal_code }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <div class="form-text">Local onde a rota começa (ex: armazém, fábrica)</div>
-                    </div>
-                    <div class="col-md-6 mb-3">
-                        <label for="end_address" class="form-label">Ponto de Retorno (Descarga)</label>
-                        <select class="form-select" id="end_address_id" name="end_address_id">
-                            <option value="">Selecione um endereço...</option>
-                            {% for addr in available_addresses %}
-                            <option value="{{ addr.id }}" {% if route and route.end_address_id == addr.id %}selected{% endif %}>
-                                {{ addr.street }}, {{ addr.city }} - {{ addr.postal_code }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                        <div class="form-text">Local onde a rota termina (ex: armazém, fábrica)</div>
-                    </div>
-                </div>
-                <div class="alert alert-info small">
-                    <i class="bi bi-info-circle"></i> 
-                    <strong>Dica:</strong> Se não selecionar pontos fixos, o sistema usará a localização do primeiro e último pedido como pontos de partida/retorno.
-                </div>
-            </div>
-        </div>
     <div class="col-md-4">
         <div class="card mb-4">
             <div class="card-header bg-white py-3">
@@ -89,6 +60,43 @@
             </div>
             <div class="card-body p-4">
                 <form id="routeForm" method="POST">
+                    <!-- PONTOS FIXOS - DENTRO DO FORMULÁRIO -->
+                    <div class="mb-3">
+                        <label for="start_address_id" class="form-label">
+                            <i class="bi bi-geo-alt"></i> Ponto de Partida (Carga)
+                        </label>
+                        <select class="form-select" id="start_address_id" name="start_address_id">
+                            <option value="">Selecione um endereço...</option>
+                            {% for addr in available_addresses %}
+                            <option value="{{ addr.id }}" {% if route and route.start_address_id == addr.id %}selected{% endif %}>
+                                📍 {{ addr.street }}, {{ addr.city }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Local onde a rota começa (ex: armazém, fábrica)</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="end_address_id" class="form-label">
+                            <i class="bi bi-geo-alt-fill"></i> Ponto de Retorno (Descarga)
+                        </label>
+                        <select class="form-select" id="end_address_id" name="end_address_id">
+                            <option value="">Selecione um endereço...</option>
+                            {% for addr in available_addresses %}
+                            <option value="{{ addr.id }}" {% if route and route.end_address_id == addr.id %}selected{% endif %}>
+                                📍 {{ addr.street }}, {{ addr.city }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">Local onde a rota termina (ex: armazém, fábrica)</div>
+                    </div>
+
+                    <div class="alert alert-info small mb-3">
+                        <i class="bi bi-info-circle"></i> 
+                        <strong>Dica:</strong> Se não selecionar pontos fixos, o sistema usará a localização do primeiro e último pedido.
+                    </div>
+
+                    <!-- OUTROS CAMPOS DO FORMULÁRIO -->
                     <div class="mb-3">
                         <label for="route_number" class="form-label">Número da Rota *</label>
                         <input type="text" class="form-control" id="route_number" name="route_number" 
@@ -217,84 +225,70 @@
                             {% else %}
                             <tr>
                                 <td colspan="5" class="text-center py-5 text-muted">
-                                    <i class="bi bi-inbox display-4 d-block mb-3"></i>
-                                    Não há pedidos pendentes disponíveis.<br>
-                                    <small>Todos os pedidos já estão atribuídos a rotas ou foram concluídos.</small>
+                                    <i class="bi bi-inbox"></i> Nenhum pedido pendente disponível
                                 </td>
                             </tr>
                             {% endfor %}
                         </tbody>
                     </table>
                 </div>
-                <div class="card-footer bg-light">
-                    <button type="button" class="btn btn-success btn-sm" id="addSelectedBtn">
-                        <i class="bi bi-plus-circle"></i> Adicionar Selecionados à Rota
-                    </button>
-                </div>
             </div>
         </div>
 
-        <!-- Waypoints da Rota (Ordenáveis) -->
+        <!-- Pedidos selecionados para a rota (Sortable) -->
         <div class="card">
-            <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Entregas da Rota ({{ waypoints|length }})</h5>
-                <div>
-                    <button type="button" class="btn btn-outline-primary btn-sm" id="optimizeBtn">
-                        <i class="bi bi-robot"></i> Otimizar com IA
-                    </button>
-                    <button type="button" class="btn btn-outline-danger btn-sm" id="clearSelectedBtn">
-                        <i class="bi bi-trash"></i> Remover Selecionados
-                    </button>
-                </div>
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">
+                    <i class="bi bi-list-check"></i> Pedidos da Rota 
+                    <span class="badge bg-primary ms-2" id="selectedCount">0</span>
+                </h5>
             </div>
             <div class="card-body p-0">
-                <ul id="sortable-list" class="list-group list-group-flush">
-                    {% for waypoint in waypoints %}
-                    <li class="list-group-item sortable-item client-card" data-id="{{ waypoint.order_id }}" data-sequence="{{ waypoint.sequence_order }}">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <span class="sortable-handle">
-                                    <i class="bi bi-grip-vertical"></i>
-                                </span>
-                                <span class="sequence-badge">{{ waypoint.sequence_order }}</span>
-                                <div class="d-inline-block">
-                                    <div>
-                                        <strong>#{{ waypoint.order.order_number if waypoint.order else 'Centralrest' }}</strong>
-                                        <small class="text-muted"> - {% if waypoint.order %}{{ waypoint.order.client.name }}{% else %}Ponto de partida/retorno{% endif %}</small>
+                <div id="sortableList" class="list-group list-group-flush">
+                    {% if route and route.waypoints %}
+                        {% for waypoint in route.waypoints %}
+                            {% if waypoint.order %}
+                            <div class="list-group-item sortable-item client-card" data-order-id="{{ waypoint.order.id }}">
+                                <div class="d-flex align-items-center">
+                                    <span class="sortable-handle">
+                                        <i class="bi bi-grip-vertical"></i>
+                                    </span>
+                                    <span class="sequence-badge">{{ waypoint.sequence_order }}</span>
+                                    <div class="flex-grow-1">
+                                        <strong>#{{ waypoint.order.order_number }}</strong> - {{ waypoint.order.client.name }}
+                                        <br>
+                                        <small class="text-muted">{{ waypoint.address.street if waypoint.address else 'Sem endereço' }}, {{ waypoint.address.city if waypoint.address else '' }}</small>
                                     </div>
-                                    <div class="small text-muted">
-                                        <i class="bi bi-geo-alt"></i> {% if waypoint.address %}{{ waypoint.address.street }}, {{ waypoint.address.city }}{% else %}Endereço não disponível{% endif %}
+                                    <button type="button" class="btn btn-sm btn-outline-danger remove-order" data-order-id="{{ waypoint.order.id }}">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            {% elif not waypoint.order_id %}
+                            <!-- Pontos fixos (início/fim) -->
+                            <div class="list-group-item {% if waypoint.notes and 'partida' in waypoint.notes.lower() %}start-point{% else %}end-point{% endif %}">
+                                <div class="d-flex align-items-center">
+                                    <span class="sequence-badge">{{ waypoint.sequence_order }}</span>
+                                    <div class="flex-grow-1">
+                                        <strong>
+                                            {% if waypoint.notes and 'partida' in waypoint.notes.lower() %}
+                                                <i class="bi bi-play-circle"></i> Ponto de Partida
+                                            {% else %}
+                                                <i class="bi bi-stop-circle"></i> Ponto de Retorno
+                                            {% endif %}
+                                        </strong>
+                                        <br>
+                                        <small class="text-muted">{{ waypoint.address.street if waypoint.address else 'Sem endereço' }}, {{ waypoint.address.city if waypoint.address else '' }}</small>
                                     </div>
                                 </div>
                             </div>
-                            <div class="btn-group">
-                                {% if waypoint.order %}
-                                <button type="button" class="btn btn-sm btn-outline-danger remove-waypoint" data-id="{{ waypoint.order_id }}">
-                                    <i class="bi bi-x-lg"></i>
-                                </button>
-                                {% endif %}
-                            </div>
-                        </div>
-                    </li>
-                    {% else %}
-                    <li class="list-group-item text-center py-5 text-muted">
-                        <i class="bi bi-truck display-4 d-block mb-3"></i>
-                        Nenhuma entrega adicionada à rota.
-                        <br>Selecione pedidos na lista acima e clique em "Adicionar Selecionados".
-                    </li>
-                    {% endfor %}
-                </ul>
-            </div>
-            <div class="card-footer bg-light">
-                <div class="row">
-                    <div class="col-md-6">
-                        <small class="text-muted">
-                            <i class="bi bi-info-circle"></i> Arraste as entregas para reordenar
-                        </small>
-                    </div>
-                    <div class="col-md-6 text-end">
-                        <span class="badge bg-primary" id="totalWaypoints">{{ waypoints|length }}</span> entregas
-                    </div>
+                            {% endif %}
+                        {% endfor %}
+                    {% endif %}
+                </div>
+                <div id="emptyState" class="text-center py-5 text-muted" style="display: {% if route and route.waypoints|length > 0 %}none{% else %}block{% endif %};">
+                    <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                    <p class="mt-2">Selecione pedidos acima para adicionar à rota</p>
                 </div>
             </div>
         </div>
@@ -302,122 +296,129 @@
 </div>
 
 <script>
-// Sortable.js para drag-and-drop
-var sortable = new Sortable(document.getElementById('sortable-list'), {
-    animation: 150,
-    handle: '.sortable-handle',
-    onEnd: function() {
-        updateSequenceNumbers();
-        saveNewOrder();
+document.addEventListener('DOMContentLoaded', function() {
+    const selectAllCheckbox = document.getElementById('selectAll');
+    const orderCheckboxes = document.querySelectorAll('.order-checkbox');
+    const selectedCount = document.getElementById('selectedCount');
+    const sortableList = document.getElementById('sortableList');
+    const emptyState = document.getElementById('emptyState');
+    const routeForm = document.getElementById('routeForm');
+    const waypointsOrderInput = document.getElementById('waypoints_order');
+
+    // Select All functionality
+    selectAllCheckbox.addEventListener('change', function() {
+        orderCheckboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+        updateSelectedOrders();
+    });
+
+    // Individual checkbox change
+    orderCheckboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', updateSelectedOrders);
+    });
+
+    function updateSelectedOrders() {
+        const selected = Array.from(orderCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+        
+        selectedCount.textContent = selected.length;
+        
+        // Adicionar à lista sortable
+        selected.forEach(orderId => {
+            if (!document.querySelector(`[data-order-id="${orderId}"]`)) {
+                const orderRow = Array.from(document.querySelectorAll('.order-checkbox'))
+                    .find(cb => cb.value === orderId)
+                    ?.closest('tr');
+                
+                if (orderRow) {
+                    const orderNumber = orderRow.querySelector('.fw-bold').textContent;
+                    const clientName = orderRow.cells[2].textContent;
+                    const address = orderRow.cells[3].textContent;
+                    const seq = document.querySelectorAll('[data-order-id]').length + 1;
+                    
+                    const item = document.createElement('div');
+                    item.className = 'list-group-item sortable-item client-card';
+                    item.setAttribute('data-order-id', orderId);
+                    item.innerHTML = `
+                        <div class="d-flex align-items-center">
+                            <span class="sortable-handle">
+                                <i class="bi bi-grip-vertical"></i>
+                            </span>
+                            <span class="sequence-badge">${seq}</span>
+                            <div class="flex-grow-1">
+                                <strong>${orderNumber}</strong> - ${clientName}
+                                <br>
+                                <small class="text-muted">${address}</small>
+                            </div>
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-order" data-order-id="${orderId}">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    
+                    sortableList.appendChild(item);
+                    item.querySelector('.remove-order').addEventListener('click', function() {
+                        removeOrder(orderId);
+                    });
+                }
+            }
+        });
+        
+        // Remover da lista sortable se desmarcado
+        document.querySelectorAll('[data-order-id]').forEach(item => {
+            const orderId = item.getAttribute('data-order-id');
+            if (!selected.includes(orderId)) {
+                item.remove();
+            }
+        });
+        
+        updateSequence();
+        emptyState.style.display = document.querySelectorAll('[data-order-id]').length === 0 ? 'block' : 'none';
     }
-});
 
-function updateSequenceNumbers() {
-    var items = document.querySelectorAll('#sortable-list .sortable-item');
-    items.forEach(function(item, index) {
-        var seq = index + 1;
-        item.querySelector('.sequence-badge').textContent = seq;
-        item.setAttribute('data-sequence', seq);
-    });
-    document.getElementById('totalWaypoints').textContent = items.length;
-}
-
-function saveNewOrder() {
-    var order = [];
-    document.querySelectorAll('#sortable-list .sortable-item').forEach(function(item) {
-        order.push(item.getAttribute('data-id'));
-    });
-    document.getElementById('waypoints_order').value = order.join(',');
-}
-
-// Selecionar todos
-document.getElementById('selectAll')?.addEventListener('change', function(e) {
-    document.querySelectorAll('.order-checkbox').forEach(cb => cb.checked = e.target.checked);
-});
-
-// Adicionar selecionados
-document.getElementById('addSelectedBtn')?.addEventListener('click', function() {
-    var selected = [];
-    document.querySelectorAll('.order-checkbox:checked').forEach(function(cb) {
-        selected.push(cb.value);
-    });
-    
-    if (selected.length === 0) {
-        alert('Selecione pelo menos um pedido');
-        return;
+    function removeOrder(orderId) {
+        const checkbox = document.querySelector(`.order-checkbox[value="${orderId}"]`);
+        if (checkbox) {
+            checkbox.checked = false;
+            updateSelectedOrders();
+        }
     }
-    
-    var form = document.getElementById('routeForm');
-    var actionInput = document.createElement('input');
-    actionInput.type = 'hidden';
-    actionInput.name = 'action';
-    actionInput.value = 'add';
-    form.appendChild(actionInput);
-    
-    var waypointsInput = document.createElement('input');
-    waypointsInput.type = 'hidden';
-    waypointsInput.name = 'add_waypoints';
-    waypointsInput.value = selected.join(',');
-    form.appendChild(waypointsInput);
-    
-    form.submit();
-});
 
-// Remover waypoint
-document.querySelectorAll('.remove-waypoint').forEach(btn => {
-    btn.addEventListener('click', function() {
-        var orderId = this.getAttribute('data-id');
-        if (confirm('Remover esta entrega da rota?')) {
-            var form = document.getElementById('routeForm');
-            var actionInput = document.createElement('input');
-            actionInput.type = 'hidden';
-            actionInput.name = 'action';
-            actionInput.value = 'remove';
-            form.appendChild(actionInput);
-            
-            var waypointInput = document.createElement('input');
-            waypointInput.type = 'hidden';
-            waypointInput.name = 'remove_waypoint';
-            waypointInput.value = orderId;
-            form.appendChild(waypointInput);
-            
-            form.submit();
+    function updateSequence() {
+        let seq = 1;
+        document.querySelectorAll('[data-order-id]').forEach(item => {
+            item.querySelector('.sequence-badge').textContent = seq++;
+        });
+    }
+
+    // Sortable.js
+    Sortable.create(sortableList, {
+        animation: 150,
+        ghostClass: 'bg-light',
+        filter: '.start-point, .end-point',
+        onEnd: function(evt) {
+            updateSequence();
         }
     });
-});
 
-// Otimizar com IA
-document.getElementById('optimizeBtn')?.addEventListener('click', function() {
-    if (confirm('A IA vai reordenar automaticamente todas as entregas para otimizar a rota. Deseja continuar?')) {
-        var form = document.getElementById('routeForm');
-        var actionInput = document.createElement('input');
-        actionInput.type = 'hidden';
-        actionInput.name = 'action';
-        actionInput.value = 'optimize';
-        form.appendChild(actionInput);
-        form.submit();
-    }
-});
-
-// Limpar selecionados
-document.getElementById('clearSelectedBtn')?.addEventListener('click', function() {
-    var selected = [];
-    document.querySelectorAll('#sortable-list .sortable-item .remove-waypoint').forEach(btn => {
-        var orderId = btn.getAttribute('data-id');
-        if (orderId) selected.push(orderId);
+    // Form submission
+    routeForm.addEventListener('submit', function(e) {
+        // Pegar TODOS os pedidos (order-id), excluindo pontos fixos
+        const orderIds = Array.from(document.querySelectorAll('[data-order-id]'))
+            .map(item => item.getAttribute('data-order-id'))
+            .filter(id => id); // Garantir que não está vazio
+        waypointsOrderInput.value = orderIds.join(',');
+        console.log('Pedidos enviados:', waypointsOrderInput.value);
     });
-    
-    if (selected.length === 0) {
-        alert('Não há entregas para remover');
-        return;
-    }
-    
-    if (confirm('Remover todas as entregas da rota?')) {
-        var promises = selected.map(orderId => 
-            fetch(window.location.href + '/remove/' + orderId, { method: 'POST' })
-        );
-        Promise.all(promises).then(() => location.reload());
-    }
+
+    // Remove button click
+    document.querySelectorAll('.remove-order').forEach(btn => {
+        btn.addEventListener('click', function() {
+            removeOrder(this.getAttribute('data-order-id'));
+        });
+    });
 });
 </script>
 {% endblock %}

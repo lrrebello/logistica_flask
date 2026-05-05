@@ -156,6 +156,9 @@ def new():
             db.session.add(route)
             db.session.flush()
             
+            # Contar quantos waypoints vamos adicionar
+            waypoint_count = 0
+            
             # Adicionar ponto de partida fixo (se existir)
             if route.start_address_id:
                 start_wp = RouteWaypoint(
@@ -167,15 +170,17 @@ def new():
                     notes='Ponto de partida (carga)'
                 )
                 db.session.add(start_wp)
+                waypoint_count += 1
             
             # Adicionar pedidos selecionados
             waypoints_order = request.form.get('waypoints_order', '')
             if waypoints_order:
-                order_ids = waypoints_order.split(',')
-                start_seq = 2 if route.start_address_id else 1
+                order_ids = [oid.strip() for oid in waypoints_order.split(',') if oid.strip()]
+                start_seq = waypoint_count + 1
                 for seq, order_id in enumerate(order_ids, start_seq):
-                    if order_id:
-                        order = Order.query.get(order_id)
+                    try:
+                        order_id_int = int(order_id)
+                        order = Order.query.get(order_id_int)
                         if order and order.address_id:
                             waypoint = RouteWaypoint(
                                 route_id=route.id,
@@ -186,10 +191,13 @@ def new():
                             )
                             db.session.add(waypoint)
                             order.status = 'confirmed'
+                            waypoint_count += 1
+                    except (ValueError, TypeError):
+                        continue
             
             # Adicionar ponto de retorno fixo (se existir)
             if route.end_address_id:
-                end_seq = len(route.waypoints) + 1
+                end_seq = waypoint_count + 1
                 end_wp = RouteWaypoint(
                     route_id=route.id,
                     order_id=None,
@@ -498,233 +506,45 @@ def optimize_route(id):
         if not destination.address:
             return 30
         
-        lat1 = origin.address.latitude
-        lon1 = origin.address.longitude
-        lat2 = destination.address.latitude
-        lon2 = destination.address.longitude
+        # Calcular distância em km
+        distance = haversine_distance(
+            origin.address.latitude,
+            origin.address.longitude,
+            destination.address.latitude,
+            destination.address.longitude
+        )
         
-        if not lat1 or not lon1 or not lat2 or not lon2:
-            return 30
-        
-        dist = haversine_distance(lat1, lon1, lat2, lon2)
-        # Velocidade média: 40 km/h em zona urbana, 80 em autoestrada
-        speed = 50 if 'autoestrada' in str(origin.address.city).lower() else 40
-        return max(5, int((dist / speed) * 60))
+        # Estimar tempo: 60 km/h em média
+        return int((distance / 60) * 60)  # Converter para minutos
     
-    # Separar pontos
-    start_point = None
-    end_point = None
-    deliveries = []
+    deliveries = [wp for wp in route.waypoints if wp.order_id]
     
+    if not deliveries:
+        return jsonify({'success': False, 'message': 'Nenhuma entrega para otimizar'})
+    
+    # Ordenar por prioridade
+    deliveries.sort(key=lambda w: (
+        0 if w.order.priority == 'urgent' else 1 if w.order.priority == 'high' else 2,
+        w.address.city if w.address else ''
+    ))
+    
+    # Atualizar sequência
+    start_seq = 1
     for wp in route.waypoints:
-        if wp.order_id is None:
-            if start_point is None:
-                start_point = wp
-            else:
-                end_point = wp
-        else:
-            deliveries.append(wp)
+        if not wp.order_id:
+            start_seq += 1
     
-    if len(deliveries) <= 1:
-        return jsonify({'success': False, 'message': 'Não há entregas suficientes'})
-    
-    # Hora de início (08:00 padrão, mas pode vir do motorista)
-    start_time = datetime.now().replace(hour=8, minute=0, second=0, microsecond=0)
-    current_time = start_time
-    current_pos = start_point
-    
-    results = []
-    time_buffer = 0  # Buffer para imprevistos
-    
-    for wp in deliveries:
-        travel_time = calculate_travel_time(current_pos, wp)
-        arrival_time = current_time + timedelta(minutes=travel_time + time_buffer)
-        
-        # Tempo de serviço (20 min padrão)
-        service_time = 20
-        
-        # Analisar janela de horário
-        window_start = None
-        window_end = None
-        has_reabertura = False
-        reabertura_time = None
-        is_feasible = True
-        status = "ok"
-        message = ""
-        
-        if wp.address and wp.address.time_window_start and wp.address.time_window_end:
-            window_start = datetime.now().replace(
-                hour=wp.address.time_window_start.hour,
-                minute=wp.address.time_window_start.minute
-            )
-            window_end = datetime.now().replace(
-                hour=wp.address.time_window_end.hour,
-                minute=wp.address.time_window_end.minute
-            )
-            
-            # Se a janela já passou hoje
-            if window_end < datetime.now():
-                # Verificar se há reabertura (exemplo: 14:00-15:00)
-                # Por enquanto, consideramos reabertura em 50 min (como no seed)
-                if wp.notes and "Reabertura" in wp.notes:
-                    has_reabertura = True
-                    # Extrair minutos da reabertura da nota
-                    import re
-                    match = re.search(r'(\d+)\s*min', wp.notes)
-                    if match:
-                        reabertura_min = int(match.group(1))
-                        reabertura_time = datetime.now() + timedelta(minutes=reabertura_min)
-                        is_feasible = True
-                        status = "reabertura"
-                        message = f"Janela fechada. Reabertura às {reabertura_time.strftime('%H:%M')}"
-                    else:
-                        is_feasible = False
-                        status = "impossivel"
-                        message = "Janela de entrega já fechada sem previsão de reabertura"
-                else:
-                    is_feasible = False
-                    status = "impossivel"
-                    message = "Janela de entrega já fechada para hoje"
-            
-            # Se ainda não passou, verificar se chegamos a tempo
-            elif arrival_time > window_end:
-                # Vamos chegar atrasado
-                time_diff = (arrival_time - window_end).seconds / 60
-                if wp.order.priority == 'urgent' and time_diff <= 30:
-                    status = "atraso_leve"
-                    message = f"Atraso estimado de {int(time_diff)} min"
-                elif wp.order.priority == 'urgent':
-                    status = "atraso_grave"
-                    message = f"Atraso significativo de {int(time_diff)} min"
-                else:
-                    is_feasible = False
-                    status = "impossivel"
-                    message = f"Não será possível chegar a tempo (atraso de {int(time_diff)} min)"
-            
-            # Chegamos dentro da janela
-            else:
-                status = "ok"
-                message = f"Chegada prevista: {arrival_time.strftime('%H:%M')} (janela: {window_start.strftime('%H:%M')}-{window_end.strftime('%H:%M')})"
-        
-        # Calcular urgência (quanto maior, mais prioritário)
-        urgency = 0
-        if wp.order.priority == 'urgent':
-            urgency = 100
-        elif wp.order.priority == 'high':
-            urgency = 60
-        else:
-            urgency = 30
-        
-        # Penalizar quem está perdendo prazo
-        if status == "atraso_leve":
-            urgency += 150
-        elif status == "atraso_grave":
-            urgency += 300
-        elif status == "reabertura":
-            urgency += 80
-        elif status == "impossivel":
-            urgency = 1000  # Prioridade máxima para avisar
-        
-        results.append({
-            'waypoint': wp,
-            'arrival_time': arrival_time,
-            'urgency': urgency,
-            'status': status,
-            'message': message,
-            'is_feasible': is_feasible,
-            'service_time': service_time,
-            'travel_time': travel_time
-        })
-        
-        # Atualizar para próxima iteração (apenas se for viável continuar)
-        if is_feasible:
-            current_time = arrival_time + timedelta(minutes=service_time)
-            current_pos = wp
-        else:
-            # Não avança para os próximos se este é impossível
-            # Isso ajuda a identificar o ponto de falha
-            pass
-    
-    # Separar por status
-    impossible = [r for r in results if not r['is_feasible']]
-    reabertura = [r for r in results if r['status'] == 'reabertura']
-    atrasados = [r for r in results if r['status'] in ['atraso_leve', 'atraso_grave']]
-    ok = [r for r in results if r['status'] == 'ok']
-    
-    # Ordenar para otimização
-    if impossible:
-        # Se há entregas impossíveis, colocar no início para avisar
-        results.sort(key=lambda r: (
-            -r['urgency'],  # Urgência inversa
-            r['arrival_time']
-        ))
-    else:
-        # Ordenar normal: urgência > tempo de chegada
-        results.sort(key=lambda r: (
-            -r['urgency'],
-            r['arrival_time']
-        ))
-    
-    # Montar sequência final
-    new_sequence = []
-    if start_point:
-        new_sequence.append(start_point)
-    
-    for r in results:
-        new_sequence.append(r['waypoint'])
-    
-    if end_point:
-        new_sequence.append(end_point)
-    
-    # Aplicar ordem
-    for seq, wp in enumerate(new_sequence, 1):
+    for seq, wp in enumerate(deliveries, start_seq):
         wp.sequence_order = seq
-        if wp.order_id:
-            wp.is_optimized = True
-            wp.optimized_by = 'ai_timewindow'
-            # Salvar informações de viabilidade na nota
-            for r in results:
-                if r['waypoint'].id == wp.id:
-                    if r['status'] != 'ok':
-                        wp.notes = f"[VIABILIDADE] {r['message']}"
-                    break
+        wp.is_optimized = True
+        wp.optimized_by = 'ai'
     
     route.was_optimized = True
     route.last_optimization_date = datetime.utcnow()
-    route.optimization_method = 'time_window'
-    
+    route.optimization_method = 'ai_priority'
     db.session.commit()
     
-    # Gerar relatório completo
-    report = []
-    if impossible:
-        report.append(f"❌ ENTREGAS IMPOSSÍVEIS: {len(impossible)}")
-        for r in impossible:
-            report.append(f"   - #{r['waypoint'].order.order_number}: {r['message']}")
-    
-    if reabertura:
-        report.append(f"⚠️ ENTREGAS COM REABERTURA: {len(reabertura)}")
-        for r in reabertura:
-            report.append(f"   - #{r['waypoint'].order.order_number}: {r['message']}")
-    
-    if atrasados:
-        report.append(f"⚠️ ENTREGAS COM ATRASO: {len(atrasados)}")
-        for r in atrasados:
-            report.append(f"   - #{r['waypoint'].order.order_number}: {r['message']}")
-    
-    report.append(f"✅ ENTREGAS OK: {len(ok)}")
-    
-    return jsonify({
-        'success': True,
-        'message': "\n".join(report),
-        'details': {
-            'total_entregas': len(deliveries),
-            'impossiveis': len(impossible),
-            'reabertura': len(reabertura),
-            'atrasados': len(atrasados),
-            'ok': len(ok)
-        }
-    })
+    return jsonify({'success': True, 'message': 'Rota otimizada com sucesso!'})
 
 @routes_bp.route('/<int:id>/map')
 @login_required
@@ -966,257 +786,12 @@ def navigate(id):
                     'url': f'https://www.waze.com/ul?ll={wp.address.latitude},{wp.address.longitude}&navigate=yes' if wp.address.latitude else '#',
                     'client': 'Centralrest - Fábrica',
                     'address': f'{wp.address.street}, {wp.address.city}',
-                    'order_number': 'PONTO DE PARTIDA',
+                    'order_number': 'PONTO DE RETORNO',
                     'type': 'start_end'
                 })
     
-        # Construir URL da rota completa do Google Maps com navegação ativada
-    full_route_google = ""
-    if len(google_waypoints) >= 2:
-        # Formato: NÃO definir origem para que use "minha localização"
-        # Assim o usuário pode navegar a partir de onde está
-        
-        destination = f"{google_waypoints[-1]['lat']},{google_waypoints[-1]['lng']}"
-        
-        # Waypoints intermediários (excluindo destino final)
-        intermediate = google_waypoints[:-1]  # Todos exceto o último (já é destino)
-        
-        if intermediate:
-            # Construir waypoints para o Google Maps
-            waypoints_str = "|".join([f"{wp['lat']},{wp['lng']}" for wp in intermediate])
-            # URL com parâmetros corretos para navegação
-            full_route_google = f"https://www.google.com/maps/dir/?api=1&destination={destination}&waypoints={waypoints_str}&travelmode=driving&dir_action=navigate"
-        else:
-            # Apenas destino
-            full_route_google = f"https://www.google.com/maps/dir/?api=1&destination={destination}&travelmode=driving&dir_action=navigate"
-    
     return render_template('routes/navigate.html', 
                          route=route, 
-                         waypoints=waypoints,
-                         google_urls=google_maps_urls,
+                         google_maps_urls=google_maps_urls,
                          waze_urls=waze_urls,
-                         full_route_google=full_route_google)
-
-
-def get_eurowag_vehicle_profile(vehicle):
-    """Prepara perfil do veículo para a Eurowag"""
-    profile = {
-        "height": float(vehicle.max_height) if vehicle.max_height else 4.0,
-        "weight": float(vehicle.max_weight) if vehicle.max_weight else 3500,
-        "length": float(vehicle.length) if vehicle.length else 12.0,
-        "width": float(vehicle.width) if vehicle.width else 2.55,
-        "vehicle_type": vehicle.type,  # van, truck, trailer
-        "hazmat": vehicle.hazmat,
-        "cargo": vehicle.cargo_type or "general"
-    }
-    
-    # Adicionar informações específicas da Eurowag
-    if vehicle.ew_vehicle_category:
-        profile["category"] = vehicle.ew_vehicle_category
-    if vehicle.ew_has_trailer:
-        profile["has_trailer"] = True
-        profile["trailer_length"] = float(vehicle.ew_trailer_length) if vehicle.ew_trailer_length else None
-    if vehicle.ew_emission_standard:
-        profile["emission"] = vehicle.ew_emission_standard
-    
-    return profile
-
-def build_eurowag_deep_link(route):
-    """Constrói o deep link para a Eurowag Navigation"""
-    
-    # Pegar waypoints com coordenadas
-    waypoints = []
-    for wp in route.waypoints:
-        if wp.address and wp.address.latitude and wp.address.longitude:
-            waypoints.append({
-                "lat": wp.address.latitude,
-                "lng": wp.address.longitude,
-                "name": wp.order.order_number if wp.order else f"Parada {wp.sequence_order}",
-                "address": f"{wp.address.street}, {wp.address.city}"
-            })
-    
-    if len(waypoints) < 2:
-        return None
-    
-    # Construir o deep link no formato Eurowag
-    # Eurowag suporta deep links para planear rotas com múltiplos waypoints
-    
-    # Base URL da aplicação Eurowag Navigation
-    base_url = "eurowagnav://"
-    
-    # Parâmetros principais
-    params = []
-    
-    # Waypoints (até 25)
-    for i, wp in enumerate(waypoints):
-        params.append(f"wp{i+1}={wp['lat']},{wp['lng']}")
-        if wp.get('name'):
-            params.append(f"name{i+1}={urllib.parse.quote(wp['name'])}")
-    
-    # Perfil do veículo
-    vehicle_profile = get_eurowag_vehicle_profile(route.vehicle)
-    params.append(f"vehicle_height={vehicle_profile['height']}")
-    params.append(f"vehicle_weight={vehicle_profile['weight']}")
-    params.append(f"vehicle_length={vehicle_profile['length']}")
-    params.append(f"vehicle_type={vehicle_profile['vehicle_type']}")
-    
-    if vehicle_profile['hazmat']:
-        params.append("hazmat=1")
-    
-    # Preferências do condutor
-    if route.driver.avoid_tolls:
-        params.append("avoid_tolls=1")
-    if route.driver.avoid_highways:
-        params.append("avoid_motorways=1")
-    if route.driver.ew_prefer_ferry:
-        params.append("prefer_ferry=1")
-    
-    # Restrições de tempo
-    if route.driver.max_driving_hours_per_day:
-        params.append(f"max_driving_hours={route.driver.max_driving_hours_per_day}")
-    
-    # Combinar tudo
-    url = f"{base_url}?" + "&".join(params)
-    
-    return url
-
-def create_eurowag_route_via_api(route):
-    """Cria rota via API da Eurowag (opcional)"""
-    api_key = current_app.config.get('EUROWAG_API_KEY')
-    if not api_key:
-        return None
-    
-    # Construir payload
-    waypoints = []
-    for wp in route.waypoints:
-        if wp.address and wp.address.latitude and wp.address.longitude:
-            waypoints.append({
-                "location": [wp.address.longitude, wp.address.latitude],
-                "type": "delivery" if wp.order else "depot",
-                "reference": wp.order.order_number if wp.order else "depot",
-                "duration": 20,  # Tempo de parada em minutos
-                "time_window": None
-            })
-    
-    payload = {
-        "waypoints": waypoints,
-        "vehicle": get_eurowag_vehicle_profile(route.vehicle),
-        "preferences": {
-            "avoid_tolls": route.driver.avoid_tolls,
-            "avoid_motorways": route.driver.avoid_highways,
-            "prefer_ferry": route.driver.ew_prefer_ferry
-        }
-    }
-    
-    try:
-        response = requests.post(
-            f"{current_app.config['EUROWAG_API_URL']}/route",
-            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-            json=payload,
-            timeout=10
-        )
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        print(f"Erro Eurowag API: {e}")
-    
-    return None
-
-
-@routes_bp.route('/<int:id>/eurowag')
-@login_required
-def eurowag_navigation(id):
-    """Abrir rota no Eurowag Navigation"""
-    route = Route.query.get_or_404(id)
-    
-    # Verificar se o condutor tem perfil Eurowag
-    if not route.driver.ew_driver_id:
-        flash('Condutor não está configurado para navegação Eurowag', 'warning')
-        return redirect(url_for('routes.view', id=id))
-    
-    # Construir deep link
-    deep_link = build_eurowag_deep_link(route)
-    
-    if deep_link:
-        # Tentar criar rota via API para obter rota otimizada
-        api_route = create_eurowag_route_via_api(route)
-        if api_route:
-            # Se tiver resposta da API, pode obter distância real, tempo, etc.
-            route.total_distance = api_route.get('total_distance')
-            route.total_estimated_duration = api_route.get('total_duration')
-            db.session.commit()
-        
-        return redirect(deep_link)
-    else:
-        flash('Não foi possível gerar rota para Eurowag (faltam coordenadas?)', 'danger')
-        return redirect(url_for('routes.view', id=id))
-
-@routes_bp.route('/<int:route_id>/waypoint/<int:waypoint_id>/complete', methods=['POST'])
-@login_required
-def complete_waypoint(route_id, waypoint_id):
-    """Marcar uma parada como entregue"""
-    waypoint = RouteWaypoint.query.get_or_404(waypoint_id)
-    
-    if waypoint.route_id != route_id:
-        return jsonify({'error': 'Waypoint não pertence a esta rota'}), 400
-    
-    waypoint.status = 'completed'
-    waypoint.delivered_at = datetime.utcnow()
-    
-    if waypoint.order:
-        waypoint.order.status = 'delivered'
-        waypoint.order.delivered_at = datetime.utcnow()
-    
-    db.session.commit()
-    
-    return jsonify({'success': True, 'message': 'Entrega registada com sucesso!'})
-@routes_bp.route('/driver/routes')
-@login_required
-def driver_routes():
-    """Motorista vê apenas as suas rotas"""
-    if current_user.role != 'driver':
-        flash('Acesso negado', 'danger')
-        return redirect(url_for('core.dashboard'))
-    
-    # Verificar se o motorista tem perfil
-    driver = Driver.query.filter_by(user_id=current_user.id).first()
-    if not driver:
-        flash('Perfil de motorista não encontrado', 'danger')
-        return redirect(url_for('core.dashboard'))
-    
-    page = request.args.get('page', 1, type=int)
-    routes = Route.query.filter_by(driver_id=driver.id).paginate(page=page, per_page=10)
-    return render_template('routes/list.html', routes=routes)
-
-
-@routes_bp.route('/<int:route_id>/waypoint/<int:waypoint_id>/undo', methods=['POST'])
-@login_required
-def undo_waypoint(route_id, waypoint_id):
-    """Desmarcar uma parada como entregue"""
-    waypoint = RouteWaypoint.query.get_or_404(waypoint_id)
-    
-    if waypoint.route_id != route_id:
-        return jsonify({'error': 'Waypoint não pertence a esta rota'}), 400
-    
-    waypoint.status = 'pending'
-    waypoint.delivered_at = None
-    
-    if waypoint.order:
-        waypoint.order.status = 'confirmed'
-        waypoint.order.delivered_at = None
-    
-    db.session.commit()
-    
-    return jsonify({'success': True, 'message': 'Entrega desmarcada!'})
-
-@routes_bp.route('/addresses')
-@login_required
-def get_available_addresses():
-    """Retorna endereços disponíveis para pontos fixos (formato JSON)"""
-    addresses = Address.query.filter_by(is_delivery_point=True).all()
-    return jsonify([{
-        'id': a.id,
-        'street': a.street,
-        'city': a.city,
-        'postal_code': a.postal_code
-    } for a in addresses])
+                         google_waypoints=google_waypoints)
